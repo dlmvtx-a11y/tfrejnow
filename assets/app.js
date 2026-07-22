@@ -378,7 +378,7 @@ App.loadUserData = function () {
         .then(function (doc) {
             if (doc.exists) {
                 var d = doc.data();
-                App.userData = { watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [], blocked: !!d.blocked };
+                App.userData = { watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [], blocked: !!d.blocked, username: d.username || '' };
             } else {
                 App.userData = { watchlist: [], progress: {}, recent: [], blocked: false };
             }
