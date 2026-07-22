@@ -1,0 +1,12 @@
+/trending            /trending.html            200
+/movies              /movies.html              200
+/tvshow              /tvshow.html              200
+/anime               /anime.html               200
+/search              /search.html              200
+/genre               /genre.html               200
+/cast                /cast.html                200
+/title               /title.html               200
+/watchlist           /watchlist.html           200
+/continue-watching   /continue-watching.html   200
+/login               /login.html               200
+/signup              /signup.html              200

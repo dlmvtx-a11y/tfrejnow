@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sign In - TfrejNOW</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236d28d9'/><text y='68' x='50' font-size='60' text-anchor='middle' fill='white'>🍿</text></svg>">
+    <meta name="theme-color" content="#6d28d9">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="assets/firebase-config.js"></script>
+    <script src="assets/app.js"></script>
+</head>
+<body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased flex flex-col items-center justify-center px-4">
+    <a href="index.html" class="mb-8"><span class="text-3xl font-black tracking-tighter text-black dark:text-white">Tfrej<span class="text-primary">NOW</span></span></a>
+
+    <div class="bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10 rounded-2xl p-8 w-full max-w-sm shadow-2xl">
+        <h1 class="text-2xl font-black text-black dark:text-white mb-1">Sign In</h1>
+        <p class="text-sm text-zinc-500 mb-6">Sign in to watch and save your list.</p>
+
+        <form id="login-form" class="flex flex-col gap-4">
+            <div>
+                <label class="text-xs font-bold text-zinc-500 uppercase">Email</label>
+                <input id="login-email" type="email" required autocomplete="email" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-zinc-500 uppercase">Password</label>
+                <input id="login-password" type="password" required autocomplete="current-password" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+            </div>
+            <p id="login-error" class="hidden text-red-500 text-sm font-medium"></p>
+            <button type="submit" id="login-submit" class="w-full bg-primary hover:bg-primary/80 text-white font-bold h-12 rounded-xl transition-colors shadow-lg shadow-primary/20">Sign In</button>
+        </form>
+
+        <p class="text-sm text-zinc-500 mt-6 text-center">Don't have an account? <a href="signup.html" class="text-primary font-bold hover:underline">Sign Up</a></p>
+    </div>
+
+    <script>
+        App.initFirebase();
+        var form = document.getElementById('login-form');
+        var errorEl = document.getElementById('login-error');
+        var submitBtn = document.getElementById('login-submit');
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            errorEl.classList.add('hidden');
+            var email = document.getElementById('login-email').value.trim();
+            var password = document.getElementById('login-password').value;
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Signing in...';
+
+            App.signIn(email, password).then(function () {
+                var params = new URLSearchParams(location.search);
+                var ret = params.get('return');
+                location.href = ret ? decodeURIComponent(ret) : 'index.html';
+            }).catch(function (err) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Sign In';
+                errorEl.innerText = friendlyError(err);
+                errorEl.classList.remove('hidden');
+            });
+        });
+
+        function friendlyError(err) {
+            var code = err && err.code || '';
+            if (code === 'timeout') return err.message;
+            if (code.indexOf('user-not-found') > -1 || code.indexOf('wrong-password') > -1 || code.indexOf('invalid-credential') > -1) return 'Incorrect email or password.';
+            if (code.indexOf('too-many-requests') > -1) return 'Too many attempts. Please wait a moment and try again.';
+            if (code.indexOf('invalid-email') > -1) return 'That email address looks invalid.';
+            if (code.indexOf('api-key') > -1 || code.indexOf('invalid-api-key') > -1) return 'Firebase isn\'t configured correctly (invalid API key). Check assets/firebase-config.js.';
+            return 'Something went wrong. Please try again.';
+        }
+    </script>
+</body>
+</html>
