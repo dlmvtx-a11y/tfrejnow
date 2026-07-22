@@ -251,6 +251,6 @@ App._viewUserDetail = function (uid) {
                     '<div><h4 class="font-bold text-black dark:text-white mb-2">Recent Watch History</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + logsHtml + '</ul></div>' +
                 '</div>';
         })
-        .catch(function () { body.innerHTML = '<p class="text-red-500">Failed to load user details.</p>'; });
+        .catch(function (e) {     console.error('Failed to load user details - check the error above for details (often a missing Firestore index):', e);     body.innerHTML = '<p class="text-red-500">Failed to load user details. Check the browser console for the specific error.</p>'; });
 };
 App.closeUserDetailModal = function () { document.getElementById('user-detail-modal').classList.add('hidden'); };
