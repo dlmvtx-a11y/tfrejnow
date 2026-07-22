@@ -22,6 +22,7 @@
     <a href="index.html" class="mb-8"><span class="text-3xl font-black tracking-tighter text-black dark:text-white">Tfrej<span class="text-primary">NOW</span></span></a>
 
     <div class="bg-black/5 dark:bg-black/40 border border-black/10 dark:border-white/10 rounded-2xl p-8 w-full max-w-sm shadow-2xl">
+        <div id="ban-notice" class="hidden mb-5 bg-red-500/10 border border-red-500/30 text-red-500 text-sm font-bold rounded-xl p-3"></div>
         <h1 class="text-2xl font-black text-black dark:text-white mb-1">Sign In</h1>
         <p class="text-sm text-zinc-500 mb-6">Sign in to watch and save your list.</p>
 
@@ -43,6 +44,21 @@
 
     <script>
         App.initFirebase();
+
+        (function () {
+            var params = new URLSearchParams(location.search);
+            if (params.get('blocked') !== '1') return;
+            var notice = document.getElementById('ban-notice');
+            if (params.get('forever') === '1') {
+                notice.innerText = 'Your account has been suspended.';
+            } else {
+                var until = params.get('until');
+                var untilText = until ? new Date(until).toLocaleString() : 'a later time';
+                notice.innerText = 'Your account is temporarily suspended until ' + untilText + '.';
+            }
+            notice.classList.remove('hidden');
+        })();
+
         var form = document.getElementById('login-form');
         var errorEl = document.getElementById('login-error');
         var submitBtn = document.getElementById('login-submit');

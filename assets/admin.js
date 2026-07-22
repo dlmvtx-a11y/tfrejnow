@@ -60,7 +60,7 @@ App._renderOverviewCards = function (users, logs) {
     var totalUsers = users.length;
     var newUsers7d = users.filter(function (u) { return daysAgo(u.createdAt) <= 7; }).length;
     var activeUsers7d = users.filter(function (u) { return daysAgo(u.lastActiveAt) <= 7; }).length;
-    var blockedUsers = users.filter(function (u) { return u.blocked; }).length;
+    var blockedUsers = users.filter(function (u) { return App.isCurrentlyBanned(u); }).length;
     var totalEvents = logs.length;
 
     var counts = {};
@@ -188,7 +188,7 @@ App._loadAdminUsers = function () {
 
 App._renderUsersTable = function (filter) {
     var list = App._allUsers;
-    if (filter) list = list.filter(function (u) { return (u.email || '').toLowerCase().indexOf(filter) > -1; });
+    if (filter) list = list.filter(function (u) { return (u.email || '').toLowerCase().indexOf(filter) > -1 || (u.username || '').toLowerCase().indexOf(filter) > -1; });
 
     var body = document.getElementById('users-table-body');
     if (!list.length) { body.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-zinc-500">No users found.</td></tr>'; return; }
@@ -196,28 +196,94 @@ App._renderUsersTable = function (filter) {
     body.innerHTML = list.map(function (u) {
         var wlCount = (u.watchlist || []).length;
         var progCount = Object.keys(u.progress || {}).length;
+        var banned = App.isCurrentlyBanned(u);
+        var statusHtml;
+        if (banned && !u.blockedUntil) statusHtml = '<span class="text-red-500 font-bold text-xs">Banned (forever)</span>';
+        else if (banned) statusHtml = '<span class="text-orange-500 font-bold text-xs">Banned until ' + fmtDateTime(u.blockedUntil) + '</span>';
+        else statusHtml = '<span class="text-green-500 font-bold text-xs">Active</span>';
+
         return '' +
             '<tr class="border-b border-black/5 dark:border-white/5">' +
-                '<td class="py-3 px-3 font-bold text-black dark:text-white">' + (u.email || '—') + '</td>' +
+                '<td class="py-3 px-3 font-bold text-black dark:text-white">' + (u.username ? u.username + ' <span class="text-zinc-500 font-normal">(' + u.email + ')</span>' : (u.email || '—')) + '</td>' +
                 '<td class="py-3 px-3 text-zinc-500">' + fmtDate(u.createdAt) + '</td>' +
                 '<td class="py-3 px-3 text-zinc-500">' + fmtDateTime(u.lastActiveAt) + '</td>' +
                 '<td class="py-3 px-3 text-zinc-500">' + wlCount + ' saved · ' + progCount + ' in progress</td>' +
-                '<td class="py-3 px-3">' + (u.blocked ? '<span class="text-red-500 font-bold text-xs">Blocked</span>' : '<span class="text-green-500 font-bold text-xs">Active</span>') + '</td>' +
+                '<td class="py-3 px-3">' + statusHtml + '</td>' +
                 '<td class="py-3 px-3 text-right whitespace-nowrap">' +
-                    '<button onclick="App._viewUserDetail(\'' + u.id + '\')" class="text-xs font-bold text-primary hover:underline mr-3">View</button>' +
-                    '<button onclick="App._toggleBlockUser(\'' + u.id + '\', ' + (!u.blocked) + ')" class="text-xs font-bold ' + (u.blocked ? 'text-green-500' : 'text-red-500') + ' hover:underline">' + (u.blocked ? 'Unblock' : 'Block') + '</button>' +
+                    '<button onclick="App._viewUserDetail(\'' + u.id + '\')" class="text-xs font-bold text-primary hover:underline">Manage</button>' +
                 '</td>' +
             '</tr>';
     }).join('');
 };
 
-App._toggleBlockUser = function (uid, block) {
-    App._db.collection('users').doc(uid).set({ blocked: block }, { merge: true }).then(function () {
-        var u = App._allUsers.filter(function (x) { return x.id === uid; })[0];
-        if (u) u.blocked = block;
-        App._renderUsersTable(document.getElementById('user-search-input').value.trim().toLowerCase());
-        App.showToast(block ? 'User blocked' : 'User unblocked');
-    }).catch(function (e) { console.error(e); App.showToast('Failed to update user.'); });
+/* ============================================================
+   ADMIN ACTIONS ON A USER
+   ============================================================ */
+App.adminBanUser = function (uid, durationDays) {
+    var data = { blocked: true };
+    if (durationDays === 'forever') {
+        data.blockedUntil = null;
+    } else {
+        var until = new Date(Date.now() + Number(durationDays) * 86400000);
+        data.blockedUntil = firebase.firestore.Timestamp.fromDate(until);
+    }
+    return App._db.collection('users').doc(uid).set(data, { merge: true });
+};
+App.adminUnbanUser = function (uid) {
+    return App._db.collection('users').doc(uid).set({ blocked: false, blockedUntil: null }, { merge: true });
+};
+App.adminUpdateUsernameFor = function (uid, username) {
+    return App._db.collection('users').doc(uid).set({ username: username }, { merge: true });
+};
+App.adminSendPasswordReset = function (email) {
+    return firebase.auth().sendPasswordResetEmail(email);
+};
+/* "Delete" without a backend can't remove the Firebase Auth login itself -
+   that requires the Admin SDK, which can only run on a server. This wipes
+   all their app data and bans them forever, which is functionally equivalent
+   from the user's side: they can never sign back in or recover anything. */
+App.adminDeleteUser = function (uid) {
+    return App._db.collection('users').doc(uid).set({
+        blocked: true, blockedUntil: null, watchlist: [], progress: {}, recent: [],
+        deletedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+};
+App.adminAddRestriction = function (uid, item) {
+    var ref = App._db.collection('users').doc(uid);
+    return ref.get().then(function (doc) {
+        var list = (doc.data() && doc.data().restrictedTitles) || [];
+        if (!list.some(function (r) { return String(r.id) === String(item.id); })) {
+            list.push({ id: item.id, mediaType: item.media_type, title: item.title || item.name });
+        }
+        return ref.set({ restrictedTitles: list }, { merge: true }).then(function () { return list; });
+    });
+};
+App.adminRemoveRestriction = function (uid, itemId) {
+    var ref = App._db.collection('users').doc(uid);
+    return ref.get().then(function (doc) {
+        var list = ((doc.data() && doc.data().restrictedTitles) || []).filter(function (r) { return String(r.id) !== String(itemId); });
+        return ref.set({ restrictedTitles: list }, { merge: true }).then(function () { return list; });
+    });
+};
+/* Creates a real Firebase Auth account for someone else without logging the
+   admin out - client SDKs can only sign in as "the current user," so this
+   uses a throwaway secondary app instance to isolate that session, then
+   discards it once the account + profile doc are created. */
+App.adminCreateUser = function (email, password, username) {
+    var secondary = firebase.apps.filter(function (a) { return a.name === 'AdminCreate'; })[0]
+        || firebase.initializeApp(window.FIREBASE_CONFIG, 'AdminCreate');
+    var secondaryAuth = secondary.auth();
+    return secondaryAuth.createUserWithEmailAndPassword(email, password).then(function (cred) {
+        var uid = cred.user.uid;
+        return App._db.collection('users').doc(uid).set({
+            email: email, username: username || '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
+            watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: []
+        }).then(function () { return secondaryAuth.signOut(); });
+    }).finally(function () {
+        secondary.delete().catch(function () {});
+    });
 };
 
 App._viewUserDetail = function (uid) {
@@ -229,28 +295,225 @@ App._viewUserDetail = function (uid) {
     body.innerHTML = '<div class="py-10 flex justify-center"><div class="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>';
     modal.classList.remove('hidden');
 
-    App._db.collection('watchLogs').where('uid', '==', uid).orderBy('ts', 'desc').limit(20).get()
+    App._db.collection('watchLogs').where('uid', '==', uid).orderBy('ts', 'desc').limit(100).get()
         .then(function (snap) {
             var logs = snap.docs.map(function (d) { return d.data(); });
-            var watchlistHtml = (u.watchlist || []).length
-                ? (u.watchlist || []).map(function (w) { return '<li>' + (w.title || w.name) + '</li>'; }).join('')
-                : '<li class="text-zinc-500">Empty</li>';
-            var progressHtml = Object.keys(u.progress || {}).length
-                ? Object.keys(u.progress).map(function (k) { var p = u.progress[k]; return '<li>' + p.title + ' - S' + p.season + ':E' + p.episode + '</li>'; }).join('')
-                : '<li class="text-zinc-500">None</li>';
-            var logsHtml = logs.length
-                ? logs.map(function (l) { var ep = l.mediaType === 'tv' && l.season ? ' (S' + l.season + ':E' + l.episode + ')' : ''; return '<li>' + l.title + ep + ' <span class="text-zinc-500">- ' + fmtDateTime(l.ts) + '</span></li>'; }).join('')
-                : '<li class="text-zinc-500">No watch history logged</li>';
-
-            body.innerHTML =
-                '<h3 class="text-xl font-black text-black dark:text-white mb-1">' + (u.email || '—') + '</h3>' +
-                '<p class="text-xs text-zinc-500 mb-6">Joined ' + fmtDate(u.createdAt) + ' · Last active ' + fmtDateTime(u.lastActiveAt) + '</p>' +
-                '<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">' +
-                    '<div><h4 class="font-bold text-black dark:text-white mb-2">My List</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + watchlistHtml + '</ul></div>' +
-                    '<div><h4 class="font-bold text-black dark:text-white mb-2">Continue Watching</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + progressHtml + '</ul></div>' +
-                    '<div><h4 class="font-bold text-black dark:text-white mb-2">Recent Watch History</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + logsHtml + '</ul></div>' +
-                '</div>';
+            App._renderUserDetailBody(u, logs);
         })
-        .catch(function (e) {     console.error('Failed to load user details - check the error above for details (often a missing Firestore index):', e);     body.innerHTML = '<p class="text-red-500">Failed to load user details. Check the browser console for the specific error.</p>'; });
+        .catch(function (e) {
+            console.error('Failed to load user details - check the error above for details (often a missing Firestore index):', e);
+            body.innerHTML = '<p class="text-red-500">Failed to load user details. Check the browser console for the specific error.</p>';
+        });
+};
+
+App._renderUserDetailBody = function (u, logs) {
+    var body = document.getElementById('user-detail-body');
+    var banned = App.isCurrentlyBanned(u);
+    var lastIp = u.lastIp || '—';
+
+    var watchlistHtml = (u.watchlist || []).length
+        ? u.watchlist.map(function (w) { return '<li>' + (w.title || w.name) + '</li>'; }).join('')
+        : '<li class="text-zinc-500">Empty</li>';
+    var progressHtml = Object.keys(u.progress || {}).length
+        ? Object.keys(u.progress).map(function (k) { var p = u.progress[k]; return '<li>' + p.title + ' - S' + p.season + ':E' + p.episode + '</li>'; }).join('')
+        : '<li class="text-zinc-500">None</li>';
+    var logsHtml = logs.length
+        ? logs.map(function (l) {
+            var ep = l.mediaType === 'tv' && l.season ? ' (S' + l.season + ':E' + l.episode + ')' : '';
+            return '<li>' + l.title + ep + ' <span class="text-zinc-500">- ' + fmtDateTime(l.ts) + (l.ip ? ' · ' + l.ip : '') + '</span></li>';
+        }).join('')
+        : '<li class="text-zinc-500">No watch history logged</li>';
+    var restrictedHtml = (u.restrictedTitles || []).length
+        ? u.restrictedTitles.map(function (r) {
+            return '<li class="flex items-center justify-between gap-2"><span>' + r.title + '</span>' +
+                '<button class="restriction-remove-btn text-red-500 text-xs font-bold hover:underline" data-uid="' + u.id + '" data-item-id="' + r.id + '">Remove</button></li>';
+        }).join('')
+        : '<li class="text-zinc-500">No restrictions</li>';
+
+    body.innerHTML =
+        '<div class="flex items-start justify-between gap-4 mb-1">' +
+            '<h3 class="text-xl font-black text-black dark:text-white">' + (u.username || u.email || '—') + '</h3>' +
+            (banned ? '<span class="text-xs font-bold px-2 py-1 rounded bg-red-500/10 text-red-500">' + (u.blockedUntil ? 'Banned until ' + fmtDateTime(u.blockedUntil) : 'Banned forever') + '</span>' : '<span class="text-xs font-bold px-2 py-1 rounded bg-green-500/10 text-green-500">Active</span>') +
+        '</div>' +
+        '<p class="text-xs text-zinc-500 mb-6">' + u.email + ' · Joined ' + fmtDate(u.createdAt) + ' · Last active ' + fmtDateTime(u.lastActiveAt) + ' · Last IP: ' + lastIp + '</p>' +
+
+        '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">' +
+            '<div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">' +
+                '<h4 class="font-bold text-black dark:text-white mb-3 text-sm">Edit Username</h4>' +
+                '<div class="flex gap-2">' +
+                    '<input id="admin-username-input" type="text" value="' + (u.username || '') + '" class="flex-1 h-10 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-3 text-sm text-black dark:text-white outline-none focus:border-primary">' +
+                    '<button id="admin-username-save-btn" class="bg-primary text-white text-xs font-bold px-4 rounded-lg">Save</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">' +
+                '<h4 class="font-bold text-black dark:text-white mb-3 text-sm">Password</h4>' +
+                '<button id="admin-reset-pw-btn" class="bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-4 h-10 rounded-lg w-full">Send Password Reset Email</button>' +
+            '</div>' +
+        '</div>' +
+
+        '<div class="bg-black/5 dark:bg-white/5 rounded-xl p-4 mb-8">' +
+            '<h4 class="font-bold text-black dark:text-white mb-3 text-sm">Ban / Suspend</h4>' +
+            '<div class="flex flex-wrap gap-2">' +
+                '<button class="ban-btn bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-3 py-2 rounded-lg" data-days="1">1 Day</button>' +
+                '<button class="ban-btn bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-3 py-2 rounded-lg" data-days="7">7 Days</button>' +
+                '<button class="ban-btn bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-3 py-2 rounded-lg" data-days="30">30 Days</button>' +
+                '<button class="ban-btn bg-red-500/10 text-red-500 text-xs font-bold px-3 py-2 rounded-lg" data-days="forever">Forever</button>' +
+                (banned ? '<button id="admin-unban-btn" class="bg-green-500/10 text-green-500 text-xs font-bold px-3 py-2 rounded-lg">Unban</button>' : '') +
+            '</div>' +
+        '</div>' +
+
+        '<div class="bg-black/5 dark:bg-white/5 rounded-xl p-4 mb-8">' +
+            '<h4 class="font-bold text-black dark:text-white mb-3 text-sm">Restrict Titles From This User</h4>' +
+            '<div class="flex gap-2 mb-3">' +
+                '<input id="admin-restrict-search" type="text" placeholder="Search a movie or show..." class="flex-1 h-10 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-3 text-sm text-black dark:text-white outline-none focus:border-primary">' +
+                '<button id="admin-restrict-search-btn" class="bg-primary text-white text-xs font-bold px-4 rounded-lg">Search</button>' +
+            '</div>' +
+            '<div id="admin-restrict-results" class="flex flex-col gap-1 mb-3 text-sm"></div>' +
+            '<h5 class="text-xs font-bold text-zinc-500 uppercase mb-2">Currently Restricted</h5>' +
+            '<ul id="admin-restricted-list" class="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">' + restrictedHtml + '</ul>' +
+        '</div>' +
+
+        '<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm mb-8">' +
+            '<div><h4 class="font-bold text-black dark:text-white mb-2">My List</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + watchlistHtml + '</ul></div>' +
+            '<div><h4 class="font-bold text-black dark:text-white mb-2">Continue Watching</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + progressHtml + '</ul></div>' +
+            '<div><h4 class="font-bold text-black dark:text-white mb-2">Watch History (' + logs.length + ')</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400 max-h-64 overflow-y-auto custom-scrollbar pr-2">' + logsHtml + '</ul></div>' +
+        '</div>' +
+
+        '<div class="border-t border-red-500/20 pt-5">' +
+            '<h4 class="font-bold text-red-500 mb-2 text-sm">Danger Zone</h4>' +
+            '<p class="text-xs text-zinc-500 mb-3">Wipes all their app data and bans them permanently. Their login cannot be fully removed from a browser-only app - see the note in chat about why.</p>' +
+            '<button id="admin-delete-btn" class="bg-red-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Delete User (Wipe & Ban)</button>' +
+        '</div>';
+
+    App._wireUserDetailActions(u);
+};
+
+App._wireUserDetailActions = function (u) {
+    var refreshTable = function () { App._renderUsersTable(document.getElementById('user-search-input').value.trim().toLowerCase()); };
+    var reopen = function () { App._viewUserDetail(u.id); };
+
+    document.getElementById('admin-username-save-btn').addEventListener('click', function () {
+        var val = document.getElementById('admin-username-input').value.trim();
+        App.adminUpdateUsernameFor(u.id, val).then(function () {
+            u.username = val;
+            App.showToast('Username updated');
+            refreshTable(); reopen();
+        }).catch(function (e) { console.error(e); App.showToast('Failed to update username.'); });
+    });
+
+    document.getElementById('admin-reset-pw-btn').addEventListener('click', function () {
+        App.adminSendPasswordReset(u.email).then(function () {
+            App.showToast('Password reset email sent to ' + u.email);
+        }).catch(function (e) { console.error(e); App.showToast('Failed to send reset email.'); });
+    });
+
+    document.querySelectorAll('.ban-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var days = btn.getAttribute('data-days');
+            if (!confirm('Ban ' + (u.username || u.email) + (days === 'forever' ? ' forever' : ' for ' + days + ' day(s)') + '?')) return;
+            App.adminBanUser(u.id, days).then(function () {
+                App.showToast('User banned');
+                App._loadAdminUsers();
+                setTimeout(reopen, 400);
+            }).catch(function (e) { console.error(e); App.showToast('Failed to ban user.'); });
+        });
+    });
+
+    var unbanBtn = document.getElementById('admin-unban-btn');
+    if (unbanBtn) unbanBtn.addEventListener('click', function () {
+        App.adminUnbanUser(u.id).then(function () {
+            App.showToast('User unbanned');
+            App._loadAdminUsers();
+            setTimeout(reopen, 400);
+        }).catch(function (e) { console.error(e); App.showToast('Failed to unban user.'); });
+    });
+
+    document.getElementById('admin-delete-btn').addEventListener('click', function () {
+        if (!confirm('This wipes all data for ' + (u.username || u.email) + ' and bans them permanently. This cannot be undone. Continue?')) return;
+        App.adminDeleteUser(u.id).then(function () {
+            App.showToast('User deleted');
+            App._loadAdminUsers();
+            App.closeUserDetailModal();
+        }).catch(function (e) { console.error(e); App.showToast('Failed to delete user.'); });
+    });
+
+    var runRestrictSearch = function () {
+        var q = document.getElementById('admin-restrict-search').value.trim();
+        var resultsEl = document.getElementById('admin-restrict-results');
+        if (!q) return;
+        resultsEl.innerHTML = '<p class="text-zinc-500 text-xs">Searching...</p>';
+        App.fetchJSON(App.BASE_URL + '/search/multi?api_key=' + App.API_KEY + '&query=' + encodeURIComponent(q) + '&include_adult=false')
+            .then(function (data) {
+                var items = (data.results || []).filter(function (it) { return it.media_type === 'movie' || it.media_type === 'tv'; }).slice(0, 8);
+                if (!items.length) { resultsEl.innerHTML = '<p class="text-zinc-500 text-xs">No results.</p>'; return; }
+                resultsEl.innerHTML = items.map(function (it) {
+                    var title = it.title || it.name;
+                    return '<div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-black/5 dark:hover:bg-white/10">' +
+                        '<span class="truncate">' + title + ' <span class="text-zinc-500 text-xs">(' + it.media_type + ')</span></span>' +
+                        '<button class="restrict-add-btn text-primary text-xs font-bold hover:underline flex-shrink-0 ml-2" data-item-id="' + it.id + '" data-media-type="' + it.media_type + '" data-title="' + title.replace(/"/g, '&quot;') + '">Restrict</button>' +
+                    '</div>';
+                }).join('');
+                resultsEl.querySelectorAll('.restrict-add-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var item = { id: btn.getAttribute('data-item-id'), media_type: btn.getAttribute('data-media-type'), title: btn.getAttribute('data-title') };
+                        App.adminAddRestriction(u.id, item).then(function (list) {
+                            u.restrictedTitles = list;
+                            App.showToast('Title restricted for this user');
+                            reopen();
+                        }).catch(function (e) { console.error(e); App.showToast('Failed to add restriction.'); });
+                    });
+                });
+            })
+            .catch(function () { resultsEl.innerHTML = '<p class="text-red-500 text-xs">Search failed.</p>'; });
+    };
+    document.getElementById('admin-restrict-search-btn').addEventListener('click', runRestrictSearch);
+    document.getElementById('admin-restrict-search').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); runRestrictSearch(); } });
+
+    document.querySelectorAll('.restriction-remove-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var itemId = btn.getAttribute('data-item-id');
+            App.adminRemoveRestriction(u.id, itemId).then(function (list) {
+                u.restrictedTitles = list;
+                App.showToast('Restriction removed');
+                reopen();
+            }).catch(function (e) { console.error(e); App.showToast('Failed to remove restriction.'); });
+        });
+    });
 };
 App.closeUserDetailModal = function () { document.getElementById('user-detail-modal').classList.add('hidden'); };
+
+/* ============================================================
+   ADD USER (creates a real Firebase Auth account from the admin panel)
+   ============================================================ */
+App.openAddUserModal = function () {
+    document.getElementById('add-user-error').classList.add('hidden');
+    document.getElementById('add-user-form').reset();
+    document.getElementById('add-user-modal').classList.remove('hidden');
+};
+App.closeAddUserModal = function () { document.getElementById('add-user-modal').classList.add('hidden'); };
+App.submitAddUser = function (e) {
+    e.preventDefault();
+    var email = document.getElementById('add-user-email').value.trim();
+    var password = document.getElementById('add-user-password').value;
+    var username = document.getElementById('add-user-username').value.trim();
+    var errEl = document.getElementById('add-user-error');
+    var btn = document.getElementById('add-user-submit-btn');
+    errEl.classList.add('hidden');
+    btn.disabled = true; btn.innerText = 'Creating...';
+
+    App.adminCreateUser(email, password, username).then(function () {
+        App.showToast('User created');
+        App.closeAddUserModal();
+        App._loadAdminUsers();
+    }).catch(function (err) {
+        var code = (err && err.code) || '';
+        var msg = 'Something went wrong.';
+        if (code.indexOf('email-already-in-use') > -1) msg = 'That email is already registered.';
+        else if (code.indexOf('weak-password') > -1) msg = 'Password should be at least 6 characters.';
+        else if (code.indexOf('invalid-email') > -1) msg = 'That email address looks invalid.';
+        errEl.innerText = msg;
+        errEl.classList.remove('hidden');
+    }).finally(function () {
+        btn.disabled = false; btn.innerText = 'Create User';
+    });
+};

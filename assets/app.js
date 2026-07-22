@@ -9,6 +9,16 @@ App.BASE_URL = 'https://api.themoviedb.org/3';
 App.IMG_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 App.BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
 App.NO_POSTER = 'https://placehold.co/500x750/222222/666666?text=No+Poster';
+
+/* Best-effort client-reported IP (no backend available to read it server-side) */
+App._clientIp = null;
+App.fetchClientIp = function () {
+    if (App._clientIp) return Promise.resolve(App._clientIp);
+    return fetch('https://api.ipify.org?format=json')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { App._clientIp = d.ip; return d.ip; })
+        .catch(function () { return null; });
+};
 App.NO_PHOTO = 'https://placehold.co/150x225/222222/666666?text=No+Photo';
 App.NO_STILL = 'https://placehold.co/300x170/222222/666666?text=No+Image';
 App.CACHE_TTL = 8 * 60 * 1000;
@@ -148,7 +158,7 @@ App.initFirebase = function () {
             if (user) {
                 App.loadUserData().then(proceed);
             } else {
-                App.userData = { watchlist: [], progress: {}, recent: [], blocked: false };
+                App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
                 proceed();
             }
         }, function (err) {
@@ -185,7 +195,7 @@ function withTimeout(promise, label) {
 }
 App.signOutUser = function () {
     return firebase.auth().signOut().then(function () {
-        App.userData = { watchlist: [], progress: {}, recent: [], blocked: false };
+        App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
         location.href = 'login.html';
     });
 };
@@ -258,15 +268,29 @@ App.gateSiteAccess = function () {
             location.href = 'login.html?return=' + returnTo;
             return;
         }
-        if (App.userData.blocked) {
+        if (App.isCurrentlyBanned(App.userData)) {
+            var untilText = App.userData.blockedUntil ? '&until=' + encodeURIComponent(fsDateToIso(App.userData.blockedUntil)) : '&forever=1';
             firebase.auth().signOut().finally(function () {
-                location.href = 'login.html?blocked=1';
+                location.href = 'login.html?blocked=1' + untilText;
             });
             return;
         }
         if (overlay) overlay.remove();
         App.maybeShowAdminLink();
     });
+};
+function fsDateToIso(ts) {
+    try { var d = ts.toDate ? ts.toDate() : new Date(ts); return d.toISOString(); } catch (e) { return ''; }
+}
+/* True if the user is blocked right now. A permanent ban has blockedUntil
+   unset; a timed ban auto-expires once blockedUntil is in the past. */
+App.isCurrentlyBanned = function (u) {
+    if (!u || !u.blocked) return false;
+    if (!u.blockedUntil) return true; // forever
+    var untilMs;
+    try { untilMs = u.blockedUntil.toDate ? u.blockedUntil.toDate().getTime() : new Date(u.blockedUntil).getTime(); }
+    catch (e) { return true; }
+    return untilMs > Date.now();
 };
 
 /* ============================================================
@@ -330,17 +354,20 @@ App.gateAdminAccess = function (onGranted) {
 App._loggedSearches = {};
 App.logWatchEvent = function (item, mediaType, season, episode) {
     if (!App.Auth.currentUser || !App._db) return;
-    App._db.collection('watchLogs').add({
-        uid: App.Auth.currentUser.uid,
-        email: App.Auth.currentUser.email,
-        itemId: String(item.id),
-        mediaType: mediaType,
-        title: item.title || item.name || '',
-        posterPath: item.poster_path || null,
-        season: season || null,
-        episode: episode || null,
-        ts: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function (e) { console.error('logWatchEvent failed', e); });
+    App.fetchClientIp().then(function (ip) {
+        App._db.collection('watchLogs').add({
+            uid: App.Auth.currentUser.uid,
+            email: App.Auth.currentUser.email,
+            itemId: String(item.id),
+            mediaType: mediaType,
+            title: item.title || item.name || '',
+            posterPath: item.poster_path || null,
+            season: season || null,
+            episode: episode || null,
+            ip: ip || null,
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(function (e) { console.error('logWatchEvent failed', e); });
+    });
 };
 App.logSearch = function (query) {
     if (!App.Auth.currentUser || !App._db) return;
@@ -368,7 +395,7 @@ App.requireAuth = function () {
 /* ============================================================
    USER DATA (Firestore-backed: watchlist, continue-watching progress, recently viewed)
    ============================================================ */
-App.userData = { watchlist: [], progress: {}, recent: [], blocked: false };
+App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
 App._userDataLoaded = false;
 
 App.loadUserData = function () {
@@ -378,18 +405,25 @@ App.loadUserData = function () {
         .then(function (doc) {
             if (doc.exists) {
                 var d = doc.data();
-                App.userData = { watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [], blocked: !!d.blocked, username: d.username || '' };
+                App.userData = {
+                    watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [],
+                    blocked: !!d.blocked, blockedUntil: d.blockedUntil || null,
+                    restrictedTitles: d.restrictedTitles || [], username: d.username || ''
+                };
             } else {
-                App.userData = { watchlist: [], progress: {}, recent: [], blocked: false };
+                App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
             }
             App._userDataLoaded = true;
             // Fire-and-forget: keep a lightweight profile record for the admin dashboard
-            // (email + join date + last-active). Never blocks rendering.
-            ref.set({
-                email: App.Auth.currentUser.email,
-                createdAt: doc.exists && doc.data().createdAt ? doc.data().createdAt : firebase.firestore.FieldValue.serverTimestamp(),
-                lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }).catch(function (e) { console.error('profile update failed', e); });
+            // (email, join date, last-active, best-effort IP). Never blocks rendering.
+            App.fetchClientIp().then(function (ip) {
+                ref.set({
+                    email: App.Auth.currentUser.email,
+                    createdAt: doc.exists && doc.data().createdAt ? doc.data().createdAt : firebase.firestore.FieldValue.serverTimestamp(),
+                    lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastIp: ip || null
+                }, { merge: true }).catch(function (e) { console.error('profile update failed', e); });
+            });
             return App.userData;
         })
         .catch(function (e) { console.error('loadUserData failed', e); App._userDataLoaded = true; return App.userData; });

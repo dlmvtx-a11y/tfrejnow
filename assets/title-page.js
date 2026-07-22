@@ -158,6 +158,13 @@ App.renderCastRow = function (data) {
 /* ---------- PLAYER ---------- */
 App.startWatching = function () {
     if (!App.requireAuth()) return;
+    if (!App.currentItemData) return;
+
+    var isRestricted = (App.userData.restrictedTitles || []).some(function (r) { return String(r.id) === String(App.currentItemData.id); });
+    if (isRestricted) {
+        App.showToast('This title has been restricted on your account by an admin.');
+        return;
+    }
 
     var target = document.getElementById('player-injection-target');
     if (target.innerHTML.trim() === '') target.innerHTML = document.getElementById('player-template').innerHTML;
