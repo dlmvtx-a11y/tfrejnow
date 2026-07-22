@@ -291,18 +291,20 @@ App._viewUserDetail = function (uid) {
     if (!u) return;
 
     var modal = document.getElementById('user-detail-modal');
-    var body = document.getElementById('user-detail-body');
-    body.innerHTML = '<div class="py-10 flex justify-center"><div class="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>';
     modal.classList.remove('hidden');
+
+    // Render every core admin control immediately using data already in memory -
+    // this never depends on the watch-history query, so it can't be blocked by it.
+    App._renderUserDetailBody(u, null);
 
     App._db.collection('watchLogs').where('uid', '==', uid).orderBy('ts', 'desc').limit(100).get()
         .then(function (snap) {
             var logs = snap.docs.map(function (d) { return d.data(); });
-            App._renderUserDetailBody(u, logs);
+            App._renderWatchHistorySection(logs, null);
         })
         .catch(function (e) {
-            console.error('Failed to load user details - check the error above for details (often a missing Firestore index):', e);
-            body.innerHTML = '<p class="text-red-500">Failed to load user details. Check the browser console for the specific error.</p>';
+            console.error('Failed to load watch history - check the error above for details (often a missing Firestore index):', e);
+            App._renderWatchHistorySection([], 'Failed to load watch history. Check the browser console for the specific error.');
         });
 };
 
@@ -317,12 +319,6 @@ App._renderUserDetailBody = function (u, logs) {
     var progressHtml = Object.keys(u.progress || {}).length
         ? Object.keys(u.progress).map(function (k) { var p = u.progress[k]; return '<li>' + p.title + ' - S' + p.season + ':E' + p.episode + '</li>'; }).join('')
         : '<li class="text-zinc-500">None</li>';
-    var logsHtml = logs.length
-        ? logs.map(function (l) {
-            var ep = l.mediaType === 'tv' && l.season ? ' (S' + l.season + ':E' + l.episode + ')' : '';
-            return '<li>' + l.title + ep + ' <span class="text-zinc-500">- ' + fmtDateTime(l.ts) + (l.ip ? ' · ' + l.ip : '') + '</span></li>';
-        }).join('')
-        : '<li class="text-zinc-500">No watch history logged</li>';
     var restrictedHtml = (u.restrictedTitles || []).length
         ? u.restrictedTitles.map(function (r) {
             return '<li class="flex items-center justify-between gap-2"><span>' + r.title + '</span>' +
@@ -376,7 +372,9 @@ App._renderUserDetailBody = function (u, logs) {
         '<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm mb-8">' +
             '<div><h4 class="font-bold text-black dark:text-white mb-2">My List</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + watchlistHtml + '</ul></div>' +
             '<div><h4 class="font-bold text-black dark:text-white mb-2">Continue Watching</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + progressHtml + '</ul></div>' +
-            '<div><h4 class="font-bold text-black dark:text-white mb-2">Watch History (' + logs.length + ')</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400 max-h-64 overflow-y-auto custom-scrollbar pr-2">' + logsHtml + '</ul></div>' +
+            '<div><h4 id="admin-history-heading" class="font-bold text-black dark:text-white mb-2">Watch History</h4>' +
+                '<div id="admin-history-body" class="text-zinc-600 dark:text-zinc-400"><div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>' +
+            '</div>' +
         '</div>' +
 
         '<div class="border-t border-red-500/20 pt-5">' +
@@ -386,6 +384,27 @@ App._renderUserDetailBody = function (u, logs) {
         '</div>';
 
     App._wireUserDetailActions(u);
+};
+
+/* Watch history renders independently - if this query fails (e.g. a missing
+   Firestore index), it only affects this one section, never the ban/edit/
+   restrict/delete controls above, which are already rendered by this point. */
+App._renderWatchHistorySection = function (logs, errorMsg) {
+    var heading = document.getElementById('admin-history-heading');
+    var el = document.getElementById('admin-history-body');
+    if (!el) return; // modal was closed before this resolved
+    if (errorMsg) {
+        el.innerHTML = '<p class="text-red-500 text-xs">' + errorMsg + '</p>';
+        return;
+    }
+    if (heading) heading.innerText = 'Watch History (' + logs.length + ')';
+    var logsHtml = logs.length
+        ? logs.map(function (l) {
+            var ep = l.mediaType === 'tv' && l.season ? ' (S' + l.season + ':E' + l.episode + ')' : '';
+            return '<li>' + l.title + ep + ' <span class="text-zinc-500">- ' + fmtDateTime(l.ts) + (l.ip ? ' · ' + l.ip : '') + '</span></li>';
+        }).join('')
+        : '<li class="text-zinc-500">No watch history logged</li>';
+    el.innerHTML = '<ul class="space-y-1 text-sm max-h-64 overflow-y-auto custom-scrollbar pr-2">' + logsHtml + '</ul>';
 };
 
 App._wireUserDetailActions = function (u) {
