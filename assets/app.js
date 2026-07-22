@@ -190,6 +190,44 @@ App.signOutUser = function () {
     });
 };
 
+/* ---------- PROFILE: username, email, password ---------- */
+App.updateUsername = function (username) {
+    if (!App.Auth.currentUser) return Promise.reject({ code: 'no-user', message: 'Not signed in.' });
+    var uid = App.Auth.currentUser.uid;
+    return withTimeout(
+        App._db.collection('users').doc(uid).set({ username: username }, { merge: true }).then(function () {
+            App.userData.username = username;
+            return App.Auth.currentUser.updateProfile({ displayName: username })
+                .catch(function (e) { console.error('displayName sync failed (non-fatal)', e); });
+        }),
+        'Update username'
+    );
+};
+
+App.reauthenticate = function (currentPassword) {
+    var user = App.Auth.currentUser;
+    if (!user || !user.email) return Promise.reject({ code: 'no-user', message: 'Not signed in.' });
+    var cred = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
+    return user.reauthenticateWithCredential(cred);
+};
+
+App.changeEmail = function (currentPassword, newEmail) {
+    return withTimeout(
+        App.reauthenticate(currentPassword)
+            .then(function () { return App.Auth.currentUser.updateEmail(newEmail); })
+            .then(function () { return App._db.collection('users').doc(App.Auth.currentUser.uid).set({ email: newEmail }, { merge: true }); }),
+        'Update email'
+    );
+};
+
+App.changePassword = function (currentPassword, newPassword) {
+    return withTimeout(
+        App.reauthenticate(currentPassword)
+            .then(function () { return App.Auth.currentUser.updatePassword(newPassword); }),
+        'Update password'
+    );
+};
+
 /* Every content page calls this right after initFirebase(). Shows a full-screen
    overlay (already in the page HTML, hidden as soon as we know the auth state)
    and redirects to login.html if nobody is signed in - the whole site requires
@@ -240,7 +278,11 @@ App.checkIsAdmin = function () {
     if (!App.Auth.currentUser) return Promise.resolve(false);
     return App._db.collection('admins').doc(App.Auth.currentUser.uid).get()
         .then(function (doc) { App._isAdmin = doc.exists; return App._isAdmin; })
-        .catch(function () { App._isAdmin = false; return false; });
+        .catch(function (e) {
+            console.error('checkIsAdmin failed - likely a Firestore rules issue:', e);
+            App._isAdmin = false;
+            return false;
+        });
 };
 App.maybeShowAdminLink = function () {
     App.checkIsAdmin().then(function (isAdmin) {
@@ -483,8 +525,9 @@ App.renderAuthNav = function () {
     if (!deskSlot && !mobSlot) return;
     var user = App.Auth.currentUser;
     if (user) {
-        if (deskSlot) deskSlot.innerHTML = '<span class="text-xs font-bold text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate">' + user.email + '</span><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
-        if (mobSlot) mobSlot.innerHTML = '<div class="px-6 py-3.5 text-xs font-bold text-zinc-500 truncate">' + user.email + '</div><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
+        var displayName = (App.userData && App.userData.username) ? App.userData.username : user.email;
+        if (deskSlot) deskSlot.innerHTML = '<a href="profile.html" class="text-xs font-bold text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate hover:text-primary transition-colors">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
+        if (mobSlot) mobSlot.innerHTML = '<a href="profile.html" class="block px-6 py-3.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 truncate hover:text-primary transition-colors">' + displayName + ' (Edit Profile)</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
     } else {
         if (deskSlot) deskSlot.innerHTML = '<a href="login.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign In</a><a href="signup.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-primary text-white hover:bg-primary/80">Sign Up</a>';
         if (mobSlot) mobSlot.innerHTML = '<a href="login.html" class="block px-6 py-3.5 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">Sign In</a><a href="signup.html" class="block px-6 py-3.5 text-sm font-bold text-primary hover:bg-primary hover:text-white">Sign Up</a>';

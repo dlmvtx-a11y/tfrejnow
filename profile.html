@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Profile - TfrejNOW</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236d28d9'/><text y='68' x='50' font-size='60' text-anchor='middle' fill='white'>🍿</text></svg>">
+    <meta name="theme-color" content="#6d28d9">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="assets/firebase-config.js"></script>
+    <script src="assets/app.js"></script>
+</head>
+<body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
+    <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
+        <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-zinc-400 text-sm font-bold">Checking your session...</span>
+    </div>
+    <div class="fixed inset-0 bg-gradient-to-b from-lightbg/90 via-lightbg to-lightbg dark:from-black/80 dark:via-background/90 dark:to-background pointer-events-none"></div>
+    <div id="nav-root"></div>
+
+    <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-2xl px-4 md:px-8 w-full flex-1">
+        <h1 class="text-2xl font-black text-black dark:text-white mb-8 border-l-4 border-primary pl-3">My Profile</h1>
+
+        <!-- Username -->
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-1">Username</h2>
+            <p class="text-xs text-zinc-500 mb-4">Shown in the nav bar instead of your email.</p>
+            <form id="username-form" class="flex flex-col gap-3">
+                <input id="username-input" type="text" maxlength="30" placeholder="Choose a username" class="w-full h-12 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                <p id="username-error" class="hidden text-red-500 text-sm font-medium"></p>
+                <p id="username-success" class="hidden text-green-500 text-sm font-medium"></p>
+                <button type="submit" class="self-start bg-primary hover:bg-primary/80 text-white font-bold px-6 h-11 rounded-xl transition-colors">Save Username</button>
+            </form>
+        </div>
+
+        <!-- Email -->
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-1">Email Address</h2>
+            <p class="text-xs text-zinc-500 mb-4">Current: <span id="current-email-display" class="font-bold text-black dark:text-white">—</span></p>
+            <form id="email-form" class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase">New Email</label>
+                    <input id="new-email-input" type="email" required autocomplete="email" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase">Current Password (to confirm)</label>
+                    <input id="email-current-password-input" type="password" required autocomplete="current-password" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                </div>
+                <p id="email-error" class="hidden text-red-500 text-sm font-medium"></p>
+                <p id="email-success" class="hidden text-green-500 text-sm font-medium"></p>
+                <button type="submit" class="self-start bg-primary hover:bg-primary/80 text-white font-bold px-6 h-11 rounded-xl transition-colors">Update Email</button>
+            </form>
+        </div>
+
+        <!-- Password -->
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-1">Password</h2>
+            <p class="text-xs text-zinc-500 mb-4">At least 6 characters.</p>
+            <form id="password-form" class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase">Current Password</label>
+                    <input id="current-password-input" type="password" required autocomplete="current-password" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase">New Password</label>
+                    <input id="new-password-input" type="password" required minlength="6" autocomplete="new-password" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-zinc-500 uppercase">Confirm New Password</label>
+                    <input id="confirm-password-input" type="password" required autocomplete="new-password" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                </div>
+                <p id="password-error" class="hidden text-red-500 text-sm font-medium"></p>
+                <p id="password-success" class="hidden text-green-500 text-sm font-medium"></p>
+                <button type="submit" class="self-start bg-primary hover:bg-primary/80 text-white font-bold px-6 h-11 rounded-xl transition-colors">Update Password</button>
+            </form>
+        </div>
+    </section>
+
+    <div id="footer-root"></div>
+
+    <script>
+        App.initFirebase();
+        App.renderNav('profile.html');
+        App.renderFooter();
+        App.gateSiteAccess();
+
+        App.onAuthReady(function (user) {
+            if (!user) return;
+            document.getElementById('current-email-display').innerText = user.email;
+            document.getElementById('username-input').value = (App.userData && App.userData.username) ? App.userData.username : '';
+        });
+
+        function setFormBusy(form, busy, busyLabel, idleLabel) {
+            var btn = form.querySelector('button[type="submit"]');
+            btn.disabled = busy;
+            btn.innerText = busy ? busyLabel : idleLabel;
+        }
+        function friendlyAuthError(err) {
+            var code = (err && err.code) || '';
+            if (code === 'timeout') return err.message;
+            if (code.indexOf('wrong-password') > -1 || code.indexOf('invalid-credential') > -1) return 'Current password is incorrect.';
+            if (code.indexOf('email-already-in-use') > -1) return 'That email is already in use by another account.';
+            if (code.indexOf('invalid-email') > -1) return 'That email address looks invalid.';
+            if (code.indexOf('requires-recent-login') > -1) return 'Please re-enter your current password and try again.';
+            if (code.indexOf('weak-password') > -1) return 'Password should be at least 6 characters.';
+            if (code.indexOf('too-many-requests') > -1) return 'Too many attempts. Please wait a moment and try again.';
+            return (err && err.message) ? err.message : 'Something went wrong. Please try again.';
+        }
+
+        // Username
+        var usernameForm = document.getElementById('username-form');
+        usernameForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var errEl = document.getElementById('username-error');
+            var okEl = document.getElementById('username-success');
+            errEl.classList.add('hidden'); okEl.classList.add('hidden');
+            var val = document.getElementById('username-input').value.trim();
+            if (!val) { errEl.innerText = 'Username cannot be empty.'; errEl.classList.remove('hidden'); return; }
+
+            setFormBusy(usernameForm, true, 'Saving...', 'Save Username');
+            App.updateUsername(val).then(function () {
+                okEl.innerText = 'Username updated.';
+                okEl.classList.remove('hidden');
+                App.renderAuthNav();
+            }).catch(function (err) {
+                errEl.innerText = friendlyAuthError(err);
+                errEl.classList.remove('hidden');
+            }).finally(function () { setFormBusy(usernameForm, false, 'Saving...', 'Save Username'); });
+        });
+
+        // Email
+        var emailForm = document.getElementById('email-form');
+        emailForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var errEl = document.getElementById('email-error');
+            var okEl = document.getElementById('email-success');
+            errEl.classList.add('hidden'); okEl.classList.add('hidden');
+            var newEmail = document.getElementById('new-email-input').value.trim();
+            var pw = document.getElementById('email-current-password-input').value;
+
+            setFormBusy(emailForm, true, 'Updating...', 'Update Email');
+            App.changeEmail(pw, newEmail).then(function () {
+                okEl.innerText = 'Email updated to ' + newEmail + '.';
+                okEl.classList.remove('hidden');
+                document.getElementById('current-email-display').innerText = newEmail;
+                document.getElementById('new-email-input').value = '';
+                document.getElementById('email-current-password-input').value = '';
+            }).catch(function (err) {
+                errEl.innerText = friendlyAuthError(err);
+                errEl.classList.remove('hidden');
+            }).finally(function () { setFormBusy(emailForm, false, 'Updating...', 'Update Email'); });
+        });
+
+        // Password
+        var passwordForm = document.getElementById('password-form');
+        passwordForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var errEl = document.getElementById('password-error');
+            var okEl = document.getElementById('password-success');
+            errEl.classList.add('hidden'); okEl.classList.add('hidden');
+            var cur = document.getElementById('current-password-input').value;
+            var next = document.getElementById('new-password-input').value;
+            var confirm = document.getElementById('confirm-password-input').value;
+
+            if (next.length < 6) { errEl.innerText = 'New password must be at least 6 characters.'; errEl.classList.remove('hidden'); return; }
+            if (next !== confirm) { errEl.innerText = 'New passwords do not match.'; errEl.classList.remove('hidden'); return; }
+
+            setFormBusy(passwordForm, true, 'Updating...', 'Update Password');
+            App.changePassword(cur, next).then(function () {
+                okEl.innerText = 'Password updated.';
+                okEl.classList.remove('hidden');
+                document.getElementById('current-password-input').value = '';
+                document.getElementById('new-password-input').value = '';
+                document.getElementById('confirm-password-input').value = '';
+            }).catch(function (err) {
+                errEl.innerText = friendlyAuthError(err);
+                errEl.classList.remove('hidden');
+            }).finally(function () { setFormBusy(passwordForm, false, 'Updating...', 'Update Password'); });
+        });
+    </script>
+</body>
+</html>
