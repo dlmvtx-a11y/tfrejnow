@@ -219,18 +219,20 @@ App._renderUsersTable = function (filter) {
 /* ============================================================
    ADMIN ACTIONS ON A USER
    ============================================================ */
-App.adminBanUser = function (uid, durationDays) {
-    var data = { blocked: true };
-    if (durationDays === 'forever') {
+App.adminBanUser = function (uid, durationDaysOrDate, reason) {
+    var data = { blocked: true, banReason: reason || null };
+    if (durationDaysOrDate === 'forever') {
         data.blockedUntil = null;
+    } else if (durationDaysOrDate instanceof Date) {
+        data.blockedUntil = firebase.firestore.Timestamp.fromDate(durationDaysOrDate);
     } else {
-        var until = new Date(Date.now() + Number(durationDays) * 86400000);
+        var until = new Date(Date.now() + Number(durationDaysOrDate) * 86400000);
         data.blockedUntil = firebase.firestore.Timestamp.fromDate(until);
     }
     return App._db.collection('users').doc(uid).set(data, { merge: true });
 };
 App.adminUnbanUser = function (uid) {
-    return App._db.collection('users').doc(uid).set({ blocked: false, blockedUntil: null }, { merge: true });
+    return App._db.collection('users').doc(uid).set({ blocked: false, blockedUntil: null, banReason: null }, { merge: true });
 };
 App.adminUpdateUsernameFor = function (uid, username) {
     return App._db.collection('users').doc(uid).set({ username: username }, { merge: true });
@@ -240,11 +242,11 @@ App.adminSendPasswordReset = function (email) {
 };
 /* "Delete" without a backend can't remove the Firebase Auth login itself -
    that requires the Admin SDK, which can only run on a server. This wipes
-   all their app data and bans them forever, which is functionally equivalent
-   from the user's side: they can never sign back in or recover anything. */
+   their app data only. It does NOT ban them - use the Ban section separately
+   if you also want to stop them signing back in. */
 App.adminDeleteUser = function (uid) {
     return App._db.collection('users').doc(uid).set({
-        blocked: true, blockedUntil: null, watchlist: [], progress: {}, recent: [],
+        watchlist: [], progress: {}, recent: [], restrictedTitles: [],
         deletedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 };
@@ -287,25 +289,37 @@ App.adminCreateUser = function (email, password, username) {
 };
 
 App._viewUserDetail = function (uid) {
-    var u = App._allUsers.filter(function (x) { return x.id === uid; })[0];
-    if (!u) return;
-
     var modal = document.getElementById('user-detail-modal');
+    var body = document.getElementById('user-detail-body');
+    body.innerHTML = '<div class="py-10 flex justify-center"><div class="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>';
     modal.classList.remove('hidden');
 
-    // Render every core admin control immediately using data already in memory -
-    // this never depends on the watch-history query, so it can't be blocked by it.
-    App._renderUserDetailBody(u, null);
+    App._db.collection('users').doc(uid).get().then(function (doc) {
+        if (!doc.exists) { body.innerHTML = '<p class="text-red-500">User not found.</p>'; return; }
+        var u = Object.assign({ id: uid }, doc.data());
 
-    App._db.collection('watchLogs').where('uid', '==', uid).orderBy('ts', 'desc').limit(100).get()
-        .then(function (snap) {
-            var logs = snap.docs.map(function (d) { return d.data(); });
-            App._renderWatchHistorySection(logs, null);
-        })
-        .catch(function (e) {
-            console.error('Failed to load watch history - check the error above for details (often a missing Firestore index):', e);
-            App._renderWatchHistorySection([], 'Failed to load watch history. Check the browser console for the specific error.');
-        });
+        // Keep the table's cached copy in sync too, so it doesn't go stale again
+        var idx = -1;
+        for (var i = 0; i < App._allUsers.length; i++) { if (App._allUsers[i].id === uid) { idx = i; break; } }
+        if (idx > -1) App._allUsers[idx] = u; else App._allUsers.push(u);
+
+        // Render every core admin control immediately - never depends on the
+        // watch-history query below, so it can't be blocked by it.
+        App._renderUserDetailBody(u, null);
+
+        App._db.collection('watchLogs').where('uid', '==', uid).orderBy('ts', 'desc').limit(100).get()
+            .then(function (snap) {
+                var logs = snap.docs.map(function (d) { return d.data(); });
+                App._renderWatchHistorySection(logs, null);
+            })
+            .catch(function (e) {
+                console.error('Failed to load watch history - check the error above for details (often a missing Firestore index):', e);
+                App._renderWatchHistorySection([], 'Failed to load watch history. Check the browser console for the specific error.');
+            });
+    }).catch(function (e) {
+        console.error('Failed to load user', e);
+        body.innerHTML = '<p class="text-red-500">Failed to load user. Check the browser console for the specific error.</p>';
+    });
 };
 
 App._renderUserDetailBody = function (u, logs) {
@@ -317,7 +331,7 @@ App._renderUserDetailBody = function (u, logs) {
         ? u.watchlist.map(function (w) { return '<li>' + (w.title || w.name) + '</li>'; }).join('')
         : '<li class="text-zinc-500">Empty</li>';
     var progressHtml = Object.keys(u.progress || {}).length
-        ? Object.keys(u.progress).map(function (k) { var p = u.progress[k]; return '<li>' + p.title + ' - S' + p.season + ':E' + p.episode + '</li>'; }).join('')
+        ? Object.keys(u.progress).map(function (k) { var p = u.progress[k]; return '<li>' + p.title + (p.media_type === 'movie' ? ' - Started (movie)' : ' - S' + p.season + ':E' + p.episode) + '</li>'; }).join('')
         : '<li class="text-zinc-500">None</li>';
     var restrictedHtml = (u.restrictedTitles || []).length
         ? u.restrictedTitles.map(function (r) {
@@ -349,12 +363,18 @@ App._renderUserDetailBody = function (u, logs) {
 
         '<div class="bg-black/5 dark:bg-white/5 rounded-xl p-4 mb-8">' +
             '<h4 class="font-bold text-black dark:text-white mb-3 text-sm">Ban / Suspend</h4>' +
-            '<div class="flex flex-wrap gap-2">' +
+            (banned ? '<p class="text-xs text-orange-500 mb-3">Currently banned' + (u.banReason ? ' — Reason: ' + u.banReason : '') + '</p>' : '') +
+            '<input id="admin-ban-reason" type="text" placeholder="Reason (optional, shown to the user)" class="w-full h-10 mb-3 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-3 text-sm text-black dark:text-white outline-none focus:border-primary">' +
+            '<div class="flex flex-wrap gap-2 mb-3">' +
                 '<button class="ban-btn bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-3 py-2 rounded-lg" data-days="1">1 Day</button>' +
                 '<button class="ban-btn bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-3 py-2 rounded-lg" data-days="7">7 Days</button>' +
                 '<button class="ban-btn bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-3 py-2 rounded-lg" data-days="30">30 Days</button>' +
                 '<button class="ban-btn bg-red-500/10 text-red-500 text-xs font-bold px-3 py-2 rounded-lg" data-days="forever">Forever</button>' +
                 (banned ? '<button id="admin-unban-btn" class="bg-green-500/10 text-green-500 text-xs font-bold px-3 py-2 rounded-lg">Unban</button>' : '') +
+            '</div>' +
+            '<div class="flex flex-wrap gap-2 items-center">' +
+                '<input id="admin-ban-custom-date" type="datetime-local" class="flex-1 min-w-[180px] h-10 bg-black/5 dark:bg-white/10 border border-black/10 dark:border-white/10 rounded-lg px-3 text-sm text-black dark:text-white outline-none focus:border-primary">' +
+                '<button id="admin-ban-custom-btn" class="bg-black/10 dark:bg-white/10 text-black dark:text-white text-xs font-bold px-4 h-10 rounded-lg whitespace-nowrap">Ban Until This Date</button>' +
             '</div>' +
         '</div>' +
 
@@ -379,8 +399,8 @@ App._renderUserDetailBody = function (u, logs) {
 
         '<div class="border-t border-red-500/20 pt-5">' +
             '<h4 class="font-bold text-red-500 mb-2 text-sm">Danger Zone</h4>' +
-            '<p class="text-xs text-zinc-500 mb-3">Wipes all their app data and bans them permanently. Their login cannot be fully removed from a browser-only app - see the note in chat about why.</p>' +
-            '<button id="admin-delete-btn" class="bg-red-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Delete User (Wipe & Ban)</button>' +
+            '<p class="text-xs text-zinc-500 mb-3">Wipes their watchlist, continue-watching, and recent-viewed data only. Does NOT ban them - they can still sign in and start fresh. Use the Ban section above if you also want to stop them signing in.</p>' +
+            '<button id="admin-delete-btn" class="bg-red-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Delete User Data</button>' +
         '</div>';
 
     App._wireUserDetailActions(u);
@@ -429,13 +449,32 @@ App._wireUserDetailActions = function (u) {
     document.querySelectorAll('.ban-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var days = btn.getAttribute('data-days');
+            var reason = document.getElementById('admin-ban-reason').value.trim();
             if (!confirm('Ban ' + (u.username || u.email) + (days === 'forever' ? ' forever' : ' for ' + days + ' day(s)') + '?')) return;
-            App.adminBanUser(u.id, days).then(function () {
+            App.adminBanUser(u.id, days, reason).then(function () {
                 App.showToast('User banned');
                 App._loadAdminUsers();
                 setTimeout(reopen, 400);
             }).catch(function (e) { console.error(e); App.showToast('Failed to ban user.'); });
         });
+    });
+
+    var customBanBtn = document.getElementById('admin-ban-custom-btn');
+    if (customBanBtn) customBanBtn.addEventListener('click', function () {
+        var val = document.getElementById('admin-ban-custom-date').value;
+        if (!val) { App.showToast('Pick a date and time first.'); return; }
+        var untilDate = new Date(val);
+        if (isNaN(untilDate.getTime()) || untilDate.getTime() <= Date.now()) {
+            App.showToast('Pick a date/time in the future.');
+            return;
+        }
+        var reason = document.getElementById('admin-ban-reason').value.trim();
+        if (!confirm('Ban ' + (u.username || u.email) + ' until ' + untilDate.toLocaleString() + '?')) return;
+        App.adminBanUser(u.id, untilDate, reason).then(function () {
+            App.showToast('User banned');
+            App._loadAdminUsers();
+            setTimeout(reopen, 400);
+        }).catch(function (e) { console.error(e); App.showToast('Failed to ban user.'); });
     });
 
     var unbanBtn = document.getElementById('admin-unban-btn');
@@ -448,12 +487,12 @@ App._wireUserDetailActions = function (u) {
     });
 
     document.getElementById('admin-delete-btn').addEventListener('click', function () {
-        if (!confirm('This wipes all data for ' + (u.username || u.email) + ' and bans them permanently. This cannot be undone. Continue?')) return;
+        if (!confirm('This wipes the watchlist, continue-watching, and history data for ' + (u.username || u.email) + '. They will NOT be banned - they can still sign in. Continue?')) return;
         App.adminDeleteUser(u.id).then(function () {
-            App.showToast('User deleted');
+            App.showToast('User data deleted');
             App._loadAdminUsers();
-            App.closeUserDetailModal();
-        }).catch(function (e) { console.error(e); App.showToast('Failed to delete user.'); });
+            setTimeout(reopen, 400);
+        }).catch(function (e) { console.error(e); App.showToast('Failed to delete user data.'); });
     });
 
     var runRestrictSearch = function () {

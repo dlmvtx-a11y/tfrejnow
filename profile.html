@@ -11,12 +11,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/style.css?v=4">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js"></script>
-    <script src="assets/app.js"></script>
+    <script src="assets/firebase-config.js?v=4"></script>
+    <script src="assets/app.js?v=4"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -82,6 +82,16 @@
                 <button type="submit" class="self-start bg-primary hover:bg-primary/80 text-white font-bold px-6 h-11 rounded-xl transition-colors">Update Password</button>
             </form>
         </div>
+
+        <!-- Preferences -->
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-1">Preferences</h2>
+            <p class="text-xs text-zinc-500 mb-4">Only affects what you see on your own homepage.</p>
+            <label class="flex items-center justify-between gap-4 cursor-pointer">
+                <span class="text-sm font-bold text-black dark:text-white">Show "Recently Viewed" on my homepage</span>
+                <input id="show-recent-toggle" type="checkbox" class="w-5 h-5 accent-primary cursor-pointer">
+            </label>
+        </div>
     </section>
 
     <div id="footer-root"></div>
@@ -96,6 +106,16 @@
             if (!user) return;
             document.getElementById('current-email-display').innerText = user.email;
             document.getElementById('username-input').value = (App.userData && App.userData.username) ? App.userData.username : '';
+            document.getElementById('show-recent-toggle').checked = App.userData.showRecentlyViewed !== false;
+        });
+
+        document.getElementById('show-recent-toggle').addEventListener('change', function (e) {
+            App.setShowRecentlyViewed(e.target.checked).then(function () {
+                App.showToast(e.target.checked ? 'Recently Viewed will show on your homepage' : 'Recently Viewed hidden from your homepage');
+            }).catch(function () {
+                App.showToast('Failed to save preference.');
+                e.target.checked = !e.target.checked;
+            });
         });
 
         function setFormBusy(form, busy, busyLabel, idleLabel) {

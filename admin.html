@@ -12,14 +12,14 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/style.css?v=4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js"></script>
-    <script src="assets/app.js"></script>
-    <script src="assets/admin.js"></script>
+    <script src="assets/firebase-config.js?v=4"></script>
+    <script src="assets/app.js?v=4"></script>
+    <script src="assets/admin.js?v=4"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -29,7 +29,7 @@
     <div class="fixed inset-0 bg-gradient-to-b from-lightbg/90 via-lightbg to-lightbg dark:from-black/80 dark:via-background/90 dark:to-background pointer-events-none"></div>
     <div id="nav-root"></div>
 
-    <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-7xl px-4 md:px-8 w-full flex-1">
+    <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-[1800px] px-4 sm:px-6 md:px-10 lg:px-16 w-full flex-1">
         <div class="flex items-center justify-between mb-8 flex-wrap gap-3">
             <h1 class="text-2xl font-black text-black dark:text-white border-l-4 border-primary pl-3">Admin Dashboard</h1>
             <a href="admin-users.html" class="text-sm font-bold bg-primary text-white px-4 py-2 rounded-xl">Manage Users →</a>

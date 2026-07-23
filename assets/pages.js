@@ -72,15 +72,20 @@ App.fetchAnimeRow = function () {
 };
 
 App.renderListRows = function () {
+    App._ensureRowShell('continue-results-shell', 'continue-results');
+    App._ensureRowShell('recent-results-shell', 'recent-results');
+    App._ensureRowShell('watchlist-results-shell', 'watchlist-results');
+
     var cont = document.getElementById('continue-section');
     var contArr = Object.keys(App.userData.progress).map(function (k) { return App.userData.progress[k]; }).sort(function (a, b) { return b.ts - a.ts; });
     if (cont) {
-        if (contArr.length) { cont.classList.remove('hidden'); App.renderCards(contArr, 'continue-results', 'tv', true, false, 'continue'); }
+        if (contArr.length) { cont.classList.remove('hidden'); App.renderCards(contArr, 'continue-results', null, true, false, 'continue'); }
         else cont.classList.add('hidden');
     }
     var recent = document.getElementById('recent-section');
     if (recent) {
-        var recentArr = (App.userData.recent || []).slice(0, 10);
+        var showRecent = App.userData.showRecentlyViewed !== false; // defaults to true
+        var recentArr = showRecent ? (App.userData.recent || []).slice(0, 10) : [];
         if (recentArr.length) { recent.classList.remove('hidden'); App.renderCards(recentArr, 'recent-results', null, true); }
         else recent.classList.add('hidden');
     }
@@ -292,13 +297,13 @@ App.initListsPage = function (kind) {
         if (kind === 'watchlist') {
             var list = App.userData.watchlist;
             if (!list.length) { document.getElementById('lists-body').innerHTML = emptyMsg('Your list is empty. Add titles from any details page.'); return; }
-            document.getElementById('lists-body').innerHTML = '<div id="lists-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>';
+            document.getElementById('lists-body').innerHTML = '<div id="lists-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 lg:gap-8"></div>';
             App.renderCards(list, 'lists-grid', null, false, false, 'watchlist');
         } else {
             var arr = Object.keys(App.userData.progress).map(function (k) { return App.userData.progress[k]; }).sort(function (a, b) { return b.ts - a.ts; });
             if (!arr.length) { document.getElementById('lists-body').innerHTML = emptyMsg('Nothing in progress yet. Start an episode and it will show up here.'); return; }
-            document.getElementById('lists-body').innerHTML = '<div id="lists-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6"></div>';
-            App.renderCards(arr, 'lists-grid', 'tv', false, false, 'continue');
+            document.getElementById('lists-body').innerHTML = '<div id="lists-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 lg:gap-8"></div>';
+            App.renderCards(arr, 'lists-grid', null, false, false, 'continue');
         }
     }
     function emptyMsg(msg) { return '<div class="text-center py-20 text-zinc-500 font-bold">' + msg + '</div>'; }

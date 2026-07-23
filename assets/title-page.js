@@ -24,7 +24,7 @@ App.initTitlePage = function () {
                 App.currentItemData = data;
                 App.currentMediaType = type;
                 App.renderTitleDetails(data, type);
-                if (autoResume && type === 'tv') App.startWatching();
+                if (autoResume) App.startWatching();
             })
             .catch(function () {
                 document.getElementById('title-body').innerHTML = '<div class="text-center py-20 text-zinc-500 font-bold">Failed to load this title. <button onclick="location.reload()" class="text-primary font-bold hover:underline">Retry</button></div>';
@@ -58,29 +58,29 @@ App.renderTitleDetails = function (data, mediaType) {
     }
 
     document.getElementById('title-body').innerHTML =
-        '<div class="flex flex-col md:flex-row gap-8 lg:gap-12 w-full">' +
-            '<div class="w-48 md:w-72 flex-shrink-0 mx-auto md:mx-0"><img src="' + (data.poster_path ? App.IMG_BASE_URL + data.poster_path : App.NO_POSTER) + '" alt="" class="w-full rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900"></div>' +
+        '<div class="flex flex-col md:flex-row gap-8 lg:gap-14 w-full">' +
+            '<div class="w-56 sm:w-64 md:w-80 lg:w-96 flex-shrink-0 mx-auto md:mx-0"><img src="' + (data.poster_path ? App.IMG_BASE_URL + data.poster_path : App.NO_POSTER) + '" alt="" class="w-full rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900"></div>' +
             '<div class="flex flex-col justify-center flex-1 text-center md:text-left min-w-0">' +
-                '<h1 class="text-4xl md:text-5xl lg:text-6xl font-black text-black dark:text-white mb-2 leading-tight">' + (data.title || data.name || '') + '</h1>' +
+                '<h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-black dark:text-white mb-3 leading-[1.05]">' + (data.title || data.name || '') + '</h1>' +
                 '<div class="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-6">' +
-                    '<span class="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded border border-black/10 dark:border-white/5">' + (data.release_date || data.first_air_date || 'N/A').substring(0, 4) + '</span>' +
-                    (runtimeText ? '<span class="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded border border-black/10 dark:border-white/5">' + runtimeText + '</span>' : '') +
-                    (data.status ? '<span class="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded border border-black/10 dark:border-white/5">' + data.status + '</span>' : '') +
-                    '<span class="flex items-center gap-1 text-yellow-500 font-bold"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' + (data.vote_average ? data.vote_average.toFixed(1) : 'NR') + '</span>' +
+                    '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + (data.release_date || data.first_air_date || 'N/A').substring(0, 4) + '</span>' +
+                    (runtimeText ? '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + runtimeText + '</span>' : '') +
+                    (data.status ? '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + data.status + '</span>' : '') +
+                    '<span class="flex items-center gap-1 text-yellow-500 font-bold"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' + (data.vote_average ? data.vote_average.toFixed(1) : 'NR') + '</span>' +
                     '<span>' + (data.genres ? data.genres.map(function (g) { return g.name; }).join(', ') : '') + '</span>' +
                 '</div>' +
-                '<p class="text-zinc-700 dark:text-zinc-300 text-base md:text-lg leading-relaxed mb-8 max-w-3xl">' + (data.overview || 'No overview available.') + '</p>' +
-                '<div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-10">' +
-                    '<button onclick="App.startWatching()" class="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg transform hover:scale-105"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Watch Now</button>' +
-                    '<button id="btn-watchlist" onclick="App.handleWatchlistToggle()" class="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-5 py-3 rounded-xl font-bold"></button>' +
-                    (App._trailerKeyFor(data) ? '<button onclick="App.openTrailer()" class="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-5 py-3 rounded-xl font-bold"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> Trailer</button>' : '') +
+                '<p class="text-zinc-700 dark:text-zinc-300 text-base md:text-xl leading-relaxed mb-8 max-w-3xl">' + (data.overview || 'No overview available.') + '</p>' +
+                '<div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-12">' +
+                    '<button onclick="App.startWatching()" class="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white px-9 py-4 rounded-xl font-bold text-lg md:text-xl shadow-lg shadow-primary/30 transition-transform transform hover:scale-105"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Watch Now</button>' +
+                    '<button id="btn-watchlist" onclick="App.handleWatchlistToggle()" class="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-6 py-4 rounded-xl font-bold text-base md:text-lg"></button>' +
+                    (App._trailerKeyFor(data) ? '<button onclick="App.openTrailer()" class="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-6 py-4 rounded-xl font-bold text-base md:text-lg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> Trailer</button>' : '') +
                 '</div>' +
-                '<div class="w-full"><h3 class="text-lg font-bold text-black dark:text-white mb-4">Top Cast</h3><div id="detail-cast" class="flex gap-4 overflow-x-auto no-scrollbar pb-4"></div></div>' +
+                '<div class="w-full"><h3 class="text-xl md:text-2xl font-black text-black dark:text-white mb-5">Top Cast</h3>' + App._scrollRowShell('detail-cast') + '</div>' +
             '</div>' +
         '</div>' +
         '<div id="player-injection-target" class="w-full"></div>' +
-        '<div id="similar-section" class="w-full mt-20 hidden"><h3 id="similar-heading" class="text-xl font-bold text-black dark:text-white mb-6 border-l-4 border-primary pl-3">Similar Titles</h3><div id="similar-results" class="flex gap-4 overflow-x-auto no-scrollbar pb-4"></div></div>' +
-        '<div id="recommended-section" class="w-full mt-12 hidden"><h3 class="text-xl font-bold text-black dark:text-white mb-6 border-l-4 border-primary pl-3">Recommended For You</h3><div id="recommended-results" class="flex gap-4 overflow-x-auto no-scrollbar pb-4"></div></div>';
+        '<div id="similar-section" class="w-full mt-20 md:mt-28 hidden"><h3 id="similar-heading" class="text-2xl md:text-3xl font-black text-black dark:text-white mb-6 border-l-4 border-primary pl-4">Similar Titles</h3>' + App._scrollRowShell('similar-results') + '</div>' +
+        '<div id="recommended-section" class="w-full mt-14 md:mt-20 hidden"><h3 class="text-2xl md:text-3xl font-black text-black dark:text-white mb-6 border-l-4 border-primary pl-4">Recommended For You</h3>' + App._scrollRowShell('recommended-results') + '</div>';
 
     App.renderWatchlistButton();
     App.renderCastRow(data);
@@ -146,7 +146,7 @@ App.renderCastRow = function (data) {
         var img = actor.profile_path ? (App.IMG_BASE_URL + actor.profile_path) : App.NO_PHOTO;
         var a = document.createElement('a');
         a.href = 'cast.html?id=' + actor.id + '&name=' + encodeURIComponent(actor.name);
-        a.className = 'w-20 md:w-24 flex-shrink-0 text-center block group focusable rounded';
+        a.className = 'w-28 sm:w-32 md:w-36 flex-shrink-0 text-center block group focusable rounded';
         a.innerHTML =
             '<img src="' + img + '" class="w-full aspect-[2/3] object-cover rounded-xl mb-2 border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900 shadow group-hover:border-primary transition-colors">' +
             '<p class="text-[11px] text-black dark:text-white font-bold leading-tight line-clamp-1">' + actor.name + '</p>' +
@@ -176,10 +176,13 @@ App.startWatching = function () {
         document.getElementById('server-note').classList.remove('hidden');
         if (nextBtn) { nextBtn.classList.remove('hidden'); nextBtn.classList.add('flex'); }
         App.setupTvDetails(App.currentItemData);
+        App.saveProgress(App.currentItemData, 'tv', App.currentSeason, App.currentEpisode);
+        App.logWatchEvent(App.currentItemData, 'tv', App.currentSeason, App.currentEpisode);
     } else {
         document.getElementById('tv-season-episodes-section').classList.add('hidden');
         document.getElementById('server-note').classList.add('hidden');
         if (nextBtn) { nextBtn.classList.add('hidden'); nextBtn.classList.remove('flex'); }
+        App.saveProgress(App.currentItemData, 'movie', null, null);
         App.logWatchEvent(App.currentItemData, 'movie', null, null);
     }
 
@@ -199,7 +202,7 @@ App.renderServerTabs = function () {
         var server = App.SERVERS[key];
         var btn = document.createElement('button');
         var isActive = App.currentServerKey === key;
-        btn.className = 'px-5 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all border ' + (isActive ? 'bg-primary border-primary text-white shadow-lg' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-black/10 dark:hover:bg-white/10');
+        btn.className = 'px-6 py-3 rounded-xl font-bold text-sm md:text-base whitespace-nowrap transition-all border ' + (isActive ? 'bg-primary border-primary text-white shadow-lg' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-black/10 dark:hover:bg-white/10');
         btn.innerText = server.name;
         btn.onclick = function () { App.currentServerKey = key; localStorage.setItem('tfrej_server', key); App.renderServerTabs(); App.changeServer(); };
         tabs.appendChild(btn);
@@ -254,7 +257,7 @@ App.setupTvDetails = function (tvData) {
 
     seasons.forEach(function (season) {
         var btn = document.createElement('button');
-        btn.className = 'season-btn px-5 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/5 text-zinc-600 dark:text-zinc-400';
+        btn.className = 'season-btn px-6 py-3 rounded-xl font-bold text-sm md:text-base whitespace-nowrap transition-all border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/5 text-zinc-600 dark:text-zinc-400';
         btn.innerText = 'Season ' + season.season_number;
         btn.dataset.season = season.season_number;
         btn.onclick = function () {
@@ -270,7 +273,7 @@ App.setupTvDetails = function (tvData) {
 };
 App.updateSeasonTabsVisual = function () {
     document.querySelectorAll('.season-btn').forEach(function (btn) {
-        btn.className = 'season-btn px-5 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all border ' +
+        btn.className = 'season-btn px-6 py-3 rounded-xl font-bold text-sm md:text-base whitespace-nowrap transition-all border ' +
             (parseInt(btn.dataset.season, 10) === App.currentSeason
                 ? 'bg-primary border-primary text-white shadow-lg'
                 : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/5 text-zinc-600 dark:text-zinc-400');
@@ -297,7 +300,7 @@ App.fetchEpisodes = function (tmdbId, seasonNumber) {
                 var isActive = (ep.episode_number === App.currentEpisode && seasonNumber === App.currentSeason);
 
                 var epDiv = document.createElement('div');
-                epDiv.className = 'flex gap-4 p-2 md:p-3 rounded-xl cursor-pointer transition-all border ' + (isActive ? 'bg-primary/10 border-primary' : 'bg-transparent border-transparent hover:border-black/10 dark:hover:border-white/10 hover:bg-black/5 dark:hover:bg-white/5');
+                epDiv.className = 'flex gap-4 md:gap-5 p-3 md:p-4 rounded-xl cursor-pointer transition-colors duration-300 border ' + (isActive ? 'bg-primary/10 border-primary' : 'bg-transparent border-transparent hover:border-black/10 dark:hover:border-white/10 hover:bg-black/5 dark:hover:bg-white/5');
                 epDiv.tabIndex = 0;
                 epDiv.setAttribute('role', 'button');
 
@@ -314,14 +317,14 @@ App.fetchEpisodes = function (tmdbId, seasonNumber) {
                 epDiv.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectEpisode(); } });
 
                 epDiv.innerHTML = '' +
-                    '<div class="w-32 md:w-48 aspect-video flex-shrink-0 bg-zinc-200 dark:bg-zinc-900 rounded-lg overflow-hidden relative border border-black/10 dark:border-white/5">' +
+                    '<div class="w-36 sm:w-44 md:w-60 aspect-video flex-shrink-0 bg-zinc-200 dark:bg-zinc-900 rounded-xl overflow-hidden relative border border-black/10 dark:border-white/5">' +
                         '<img src="' + stillPath + '" class="w-full h-full object-cover">' +
-                        '<div class="absolute bottom-1 right-1 bg-black/80 px-1.5 py-0.5 text-[10px] font-bold rounded text-white shadow">E' + ep.episode_number + '</div>' +
-                        (isActive ? '<div class="absolute inset-0 bg-primary/30 flex items-center justify-center"><div class="bg-primary rounded-full p-2 shadow-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div></div>' : '') +
+                        '<div class="absolute bottom-1.5 right-1.5 bg-black/80 px-2 py-1 text-[11px] font-bold rounded text-white shadow">E' + ep.episode_number + '</div>' +
+                        (isActive ? '<div class="absolute inset-0 bg-primary/30 flex items-center justify-center"><div class="bg-primary rounded-full p-2.5 shadow-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div></div>' : '') +
                     '</div>' +
                     '<div class="flex flex-col justify-center flex-1 min-w-0 py-1">' +
-                        '<h4 class="text-sm md:text-base font-bold ' + (isActive ? 'text-primary' : 'text-black dark:text-white') + ' truncate">' + ep.episode_number + '. ' + (ep.name || '') + '</h4>' +
-                        '<p class="text-xs text-zinc-600 dark:text-zinc-400 mt-1.5 line-clamp-2 md:line-clamp-3 leading-relaxed hidden md:block">' + (ep.overview || 'No description available.') + '</p>' +
+                        '<h4 class="text-base md:text-lg font-bold ' + (isActive ? 'text-primary' : 'text-black dark:text-white') + ' truncate">' + ep.episode_number + '. ' + (ep.name || '') + '</h4>' +
+                        '<p class="text-sm text-zinc-600 dark:text-zinc-400 mt-2 line-clamp-2 md:line-clamp-3 leading-relaxed hidden sm:block">' + (ep.overview || 'No description available.') + '</p>' +
                     '</div>';
                 episodesList.appendChild(epDiv);
                 if (isActive) setTimeout(function () { epDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 150);

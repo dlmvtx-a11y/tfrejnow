@@ -201,6 +201,12 @@ App.signOutUser = function () {
 };
 
 /* ---------- PROFILE: username, email, password ---------- */
+App.setShowRecentlyViewed = function (show) {
+    if (!App.Auth.currentUser) return Promise.reject({ code: 'no-user', message: 'Not signed in.' });
+    App.userData.showRecentlyViewed = show;
+    return App._db.collection('users').doc(App.Auth.currentUser.uid).set({ showRecentlyViewed: show }, { merge: true });
+};
+
 App.updateUsername = function (username) {
     if (!App.Auth.currentUser) return Promise.reject({ code: 'no-user', message: 'Not signed in.' });
     var uid = App.Auth.currentUser.uid;
@@ -270,8 +276,9 @@ App.gateSiteAccess = function () {
         }
         if (App.isCurrentlyBanned(App.userData)) {
             var untilText = App.userData.blockedUntil ? '&until=' + encodeURIComponent(fsDateToIso(App.userData.blockedUntil)) : '&forever=1';
+            var reasonText = App.userData.banReason ? '&reason=' + encodeURIComponent(App.userData.banReason) : '';
             firebase.auth().signOut().finally(function () {
-                location.href = 'login.html?blocked=1' + untilText;
+                location.href = 'login.html?blocked=1' + untilText + reasonText;
             });
             return;
         }
@@ -407,8 +414,9 @@ App.loadUserData = function () {
                 var d = doc.data();
                 App.userData = {
                     watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [],
-                    blocked: !!d.blocked, blockedUntil: d.blockedUntil || null,
-                    restrictedTitles: d.restrictedTitles || [], username: d.username || ''
+                    blocked: !!d.blocked, blockedUntil: d.blockedUntil || null, banReason: d.banReason || null,
+                    restrictedTitles: d.restrictedTitles || [], username: d.username || '',
+                    showRecentlyViewed: d.showRecentlyViewed !== false
                 };
             } else {
                 App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
@@ -459,7 +467,7 @@ App.removeFromWatchlist = function (id) {
 };
 App.saveProgress = function (item, mediaType, season, episode) {
     if (!App.requireAuth()) return;
-    App.userData.progress[item.id] = { id: item.id, title: item.name || item.title, poster_path: item.poster_path, media_type: 'tv', season: season, episode: episode, ts: Date.now() };
+    App.userData.progress[item.id] = { id: item.id, title: item.name || item.title, poster_path: item.poster_path, media_type: mediaType, season: season || null, episode: episode || null, ts: Date.now() };
     App.saveUserData();
 };
 App.removeFromContinue = function (id) {
@@ -490,8 +498,8 @@ App.renderNav = function (activeHref) {
     var root = document.getElementById('nav-root');
     if (!root) return;
     root.innerHTML =
-        '<nav class="fixed top-0 md:top-4 left-0 right-0 z-[100] flex flex-col items-center w-full">' +
-            '<div id="navbar-inner" class="bg-white/80 dark:bg-black/60 backdrop-blur-md md:rounded-2xl border-b md:border border-black/5 dark:border-white/5 shadow-lg px-4 md:px-6 h-[60px] md:h-[70px] flex items-center justify-between gap-4 w-full max-w-7xl transition-shadow duration-300">' +
+        '<nav class="safe-top fixed top-0 md:top-4 left-0 right-0 z-[100] flex flex-col items-center w-full">' +
+            '<div id="navbar-inner" class="bg-white/80 dark:bg-black/60 backdrop-blur-md md:rounded-2xl border-b md:border border-black/5 dark:border-white/5 shadow-lg px-5 md:px-10 h-[64px] md:h-[76px] flex items-center justify-between gap-4 w-full max-w-[1800px] transition-shadow duration-300">' +
                 '<a href="index.html" class="flex items-center gap-2 flex-shrink-0 focusable rounded"><span class="text-2xl md:text-3xl font-black tracking-tighter text-black dark:text-white leading-none">Tfrej<span class="text-primary">NOW</span></span></a>' +
                 '<div class="hidden lg:flex items-center gap-6 text-sm font-bold text-zinc-600 dark:text-zinc-300">' +
                     navLink('index.html', 'Home', activeHref) +
@@ -515,7 +523,7 @@ App.renderNav = function (activeHref) {
                     '</button>' +
                 '</div>' +
             '</div>' +
-            '<div id="mobile-menu" class="hidden lg:hidden w-full max-w-7xl mt-2 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 shadow-xl overflow-hidden">' +
+            '<div id="mobile-menu" class="hidden lg:hidden w-full max-w-[1800px] mt-2 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/5 shadow-xl overflow-hidden">' +
                 mobileLink('index.html', 'Home', activeHref) +
                 mobileLink('trending.html', 'Trending', activeHref) +
                 mobileLink('movies.html', 'Movies', activeHref) +
@@ -591,7 +599,7 @@ App.renderFooter = function () {
     if (!root) return;
     root.innerHTML =
         '<footer class="w-full border-t border-black/10 dark:border-white/5 mt-auto bg-lightbg/80 dark:bg-black/50 backdrop-blur-md">' +
-            '<div class="max-w-7xl mx-auto px-4 py-8 text-center flex flex-col items-center gap-4">' +
+            '<div class="max-w-[1800px] mx-auto px-4 sm:px-6 md:px-10 lg:px-16 py-10 text-center flex flex-col items-center gap-4">' +
                 '<span class="text-2xl font-black tracking-tighter text-black dark:text-white opacity-50">Tfrej<span class="text-primary">NOW</span></span>' +
                 '<p class="text-xs text-zinc-500 max-w-2xl leading-relaxed">Disclaimer: TfrejNOW is a UI wrapper and does not host, upload, or store any videos. All video streams are provided by non-affiliated third-party services.</p>' +
             '</div>' +
@@ -612,6 +620,20 @@ App.renderGenreBar = function (containerId) {
         btn.textContent = g.label;
         row.appendChild(btn);
     });
+};
+/* Reusable "row with left/right scroll arrows" wrapper markup, used for cast,
+   similar titles, recommended, and any other horizontally-scrolling row. */
+App._scrollRowShell = function (rowId) {
+    return '<div class="relative group/row">' +
+        '<button type="button" onclick="App.scrollRow(\'' + rowId + '\',-1)" aria-label="Scroll left" class="hidden md:flex opacity-0 group-hover/row:opacity-100 transition-opacity absolute -left-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-black/90 border border-black/10 dark:border-white/10 shadow-lg text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">‹</button>' +
+        '<div id="' + rowId + '" class="flex gap-4 overflow-x-auto no-scrollbar pb-4 scroll-smooth"></div>' +
+        '<button type="button" onclick="App.scrollRow(\'' + rowId + '\',1)" aria-label="Scroll right" class="hidden md:flex opacity-0 group-hover/row:opacity-100 transition-opacity absolute -right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-black/90 border border-black/10 dark:border-white/10 shadow-lg text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">›</button>' +
+    '</div>';
+};
+App._ensureRowShell = function (shellId, rowId) {
+    var shell = document.getElementById(shellId);
+    if (!shell || document.getElementById(rowId)) return; // already injected
+    shell.innerHTML = App._scrollRowShell(rowId);
 };
 App.scrollRow = function (id, dir) {
     var row = document.getElementById(id);
@@ -658,7 +680,7 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
         var year = (item.release_date || item.first_air_date || '').substring(0, 4);
         var rating = item.vote_average ? item.vote_average.toFixed(1) : null;
         var href = (removeType === 'continue')
-            ? 'title.html?type=tv&id=' + item.id + '&resume=1'
+            ? 'title.html?type=' + mediaType + '&id=' + item.id + '&resume=1'
             : 'title.html?type=' + mediaType + '&id=' + item.id;
 
         var progressTag = '';
@@ -676,19 +698,19 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
         }
 
         html += '' +
-            '<a href="' + href + '" class="' + (horizontal ? 'w-32 md:w-44 flex-shrink-0' : '') + ' focusable block bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/50 transition-all cursor-pointer group shadow-md relative">' +
+            '<a href="' + href + '" class="poster-card ' + (horizontal ? 'w-40 sm:w-48 md:w-56 lg:w-60 flex-shrink-0' : '') + ' focusable block bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 cursor-pointer group shadow-md relative">' +
                 progressTag + removeBtn +
                 '<div class="relative aspect-[2/3] overflow-hidden bg-zinc-200 dark:bg-zinc-900">' +
-                    '<img src="' + posterPath + '" class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" loading="lazy">' +
-                    '<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">' +
-                        '<div class="bg-primary text-white rounded-full p-3 shadow-lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
+                    '<img src="' + posterPath + '" class="w-full h-full object-cover group-hover:scale-110" loading="lazy">' +
+                    '<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/25">' +
+                        '<div class="bg-primary text-white rounded-full p-3.5 shadow-lg shadow-primary/50"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
                     '</div>' +
-                    '<div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-white text-[10px] font-bold">' +
+                    '<div class="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/95 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2 text-white text-[11px] font-bold">' +
                         (rating ? '<span class="flex items-center gap-0.5 text-yellow-400">★ ' + rating + '</span>' : '') +
                         (year ? '<span>' + year + '</span>' : '') +
                     '</div>' +
                 '</div>' +
-                '<div class="p-3"><h3 class="text-black dark:text-white text-sm font-bold truncate">' + title + '</h3><p class="text-[10px] font-bold text-zinc-500 uppercase mt-1 tracking-wider">' + mediaType + '</p></div>' +
+                '<div class="p-3"><h3 class="text-black dark:text-white text-sm md:text-base font-bold truncate">' + title + '</h3><p class="text-[10px] font-bold text-zinc-500 uppercase mt-1 tracking-wider">' + mediaType + '</p></div>' +
             '</a>';
     });
     container.insertAdjacentHTML('beforeend', html);
