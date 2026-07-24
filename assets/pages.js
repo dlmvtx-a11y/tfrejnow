@@ -18,7 +18,7 @@ App.initHomePage = function () {
 
         App.fetchJSON(App.BASE_URL + '/trending/all/day?api_key=' + App.API_KEY)
             .then(function (data) {
-                var results = App.filterKidsSafe(data.results || []);
+                var results = App.applyProfileFilters(data.results || []);
                 App.renderCards(results.slice(0, 10), 'trending-results');
                 App._heroItems = results.slice(0, 5);
                 if (App._heroItems.length) { App.renderHeroDots(); App.showHero(0); App.startHeroRotation(); }
@@ -27,6 +27,7 @@ App.initHomePage = function () {
 
         if ('IntersectionObserver' in window) {
             var targets = [
+                { id: 'newweek-section', fn: App.fetchNewThisWeekRow },
                 { id: 'movies-section', fn: App.fetchMoviesRow },
                 { id: 'tv-section', fn: App.fetchTvRow },
                 { id: 'anime-section', fn: App.fetchAnimeRow }
@@ -41,7 +42,7 @@ App.initHomePage = function () {
             }, { rootMargin: '400px' });
             targets.forEach(function (t) { var el = document.getElementById(t.id); if (el) observer.observe(el); });
         } else {
-            App.fetchMoviesRow(); App.fetchTvRow(); App.fetchAnimeRow();
+            App.fetchNewThisWeekRow(); App.fetchMoviesRow(); App.fetchTvRow(); App.fetchAnimeRow();
         }
     });
 
@@ -52,22 +53,29 @@ App.initHomePage = function () {
     }
 };
 
+App.fetchNewThisWeekRow = function () {
+    document.getElementById('newweek-results').innerHTML = App.skeletons(10);
+    App.fetchJSON(App.BASE_URL + '/movie/now_playing?api_key=' + App.API_KEY + '&region=US')
+        .then(function (d) { App.renderCards(App.applyProfileFilters(d.results || []).slice(0, 10), 'newweek-results', 'movie'); })
+        .catch(function () { document.getElementById('newweek-results').innerHTML = App.retryHtml('newweek-results', 'App.fetchNewThisWeekRow'); });
+};
+
 App.fetchMoviesRow = function () {
     document.getElementById('movies-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/discover/movie?api_key=' + App.API_KEY + '&sort_by=popularity.desc')
-        .then(function (d) { App.renderCards(App.filterKidsSafe(d.results || []).slice(0, 10), 'movies-results', 'movie'); })
+        .then(function (d) { App.renderCards(App.applyProfileFilters(d.results || []).slice(0, 10), 'movies-results', 'movie'); })
         .catch(function () { document.getElementById('movies-results').innerHTML = App.retryHtml('movies-results', 'App.fetchMoviesRow'); });
 };
 App.fetchTvRow = function () {
     document.getElementById('tv-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/discover/tv?api_key=' + App.API_KEY + '&sort_by=popularity.desc')
-        .then(function (d) { App.renderCards(App.filterKidsSafe(d.results || []).slice(0, 10), 'tv-results', 'tv'); })
+        .then(function (d) { App.renderCards(App.applyProfileFilters(d.results || []).slice(0, 10), 'tv-results', 'tv'); })
         .catch(function () { document.getElementById('tv-results').innerHTML = App.retryHtml('tv-results', 'App.fetchTvRow'); });
 };
 App.fetchAnimeRow = function () {
     document.getElementById('anime-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/discover/tv?api_key=' + App.API_KEY + '&with_genres=16&with_original_language=ja&sort_by=popularity.desc')
-        .then(function (d) { App.renderCards(App.filterKidsSafe(d.results || []).slice(0, 10), 'anime-results', 'tv'); })
+        .then(function (d) { App.renderCards(App.applyProfileFilters(d.results || []).slice(0, 10), 'anime-results', 'tv'); })
         .catch(function () { document.getElementById('anime-results').innerHTML = App.retryHtml('anime-results', 'App.fetchAnimeRow'); });
 };
 
@@ -255,7 +263,7 @@ App._runBrowse = function (pageFetcher, noAutoLoad) {
 App._loadBrowsePage = function (isNew) {
     if (!App._browseFetcher) return Promise.resolve();
     return App._browseFetcher(App._browsePage).then(function (combined) {
-        combined = App.filterKidsSafe(combined);
+        combined = App.applyProfileFilters(combined);
         document.getElementById('browse-loading').classList.add('hidden');
         if (isNew) document.getElementById('browse-results').innerHTML = '';
         if (isNew && combined.length === 0) {

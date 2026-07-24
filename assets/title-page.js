@@ -35,11 +35,11 @@ App.initTitlePage = function () {
 App.renderTitleDetails = function (data, mediaType) {
     var id = data.id;
 
-    if (App.isKidsProfile && App.isKidsProfile()) {
+    if (App.applyProfileFilters) {
         var itemGenreIds = (data.genres || []).map(function (g) { return g.id; });
-        var isSafe = App.filterKidsSafe([{ genre_ids: itemGenreIds }]).length > 0;
-        if (!isSafe) {
-            App.showToast('This title isn\'t available on a Kids profile.');
+        var isAllowed = App.applyProfileFilters([{ genre_ids: itemGenreIds }]).length > 0;
+        if (!isAllowed) {
+            App.showToast('This title isn\'t available on your profile.');
             setTimeout(function () { location.href = 'index.html'; }, 800);
             return;
         }
@@ -102,7 +102,7 @@ App.renderTitleDetails = function (data, mediaType) {
     var similarItems = (data.similar && data.similar.results) ? data.similar.results.slice() : [];
     if (isAnime) similarItems = similarItems.filter(function (it) { return it.original_language === 'ja'; });
     var renderSimilar = function (items) {
-        items = App.filterKidsSafe(items || []);
+        items = App.applyProfileFilters(items || []);
         if (items.length > 0) { similarSection.classList.remove('hidden'); App.renderCards(items.slice(0, 10), 'similar-results', mediaType, true); }
         else similarSection.classList.add('hidden');
     };
@@ -114,7 +114,7 @@ App.renderTitleDetails = function (data, mediaType) {
     } else similarSection.classList.add('hidden');
 
     var recSection = document.getElementById('recommended-section');
-    var recItems = App.filterKidsSafe((data.recommendations && data.recommendations.results) || []);
+    var recItems = App.applyProfileFilters((data.recommendations && data.recommendations.results) || []);
     if (recItems.length > 0) {
         recSection.classList.remove('hidden');
         App.renderCards(recItems.slice(0, 10), 'recommended-results', mediaType, true);
@@ -224,6 +224,34 @@ App.changeServer = function () {
     if (!App.currentItemData || !App.currentMediaType) return;
     var iframe = document.getElementById('video-frame');
     if (iframe) iframe.src = App.SERVERS[App.currentServerKey][App.currentMediaType](App.currentItemData.id);
+    App._startServerNudgeTimer();
+};
+
+/* Not real failure detection (impossible cross-origin) - just a helpful
+   nudge after a while in case the video never actually started. */
+App._serverNudgeTimer = null;
+App._startServerNudgeTimer = function () {
+    if (App._serverNudgeTimer) clearTimeout(App._serverNudgeTimer);
+    App._serverNudgeTimer = setTimeout(function () {
+        App.showToast('Video not loading? Try switching servers above.');
+    }, 12000);
+};
+
+App.reportBrokenServer = function () {
+    if (!App.requireAuth() || !App.currentItemData || !App._db) return;
+    App._db.collection('serverReports').add({
+        uid: App.Auth.currentUser.uid,
+        email: App.Auth.currentUser.email,
+        itemId: String(App.currentItemData.id),
+        mediaType: App.currentMediaType,
+        title: App.currentItemData.title || App.currentItemData.name || '',
+        server: App.SERVERS[App.currentServerKey] ? App.SERVERS[App.currentServerKey].name : App.currentServerKey,
+        season: App.currentMediaType === 'tv' ? App.currentSeason : null,
+        episode: App.currentMediaType === 'tv' ? App.currentEpisode : null,
+        ts: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function () {
+        App.showToast('Thanks - reported to the admin.');
+    }).catch(function (e) { console.error('reportBrokenServer failed', e); App.showToast('Failed to send report.'); });
 };
 
 App.nextEpisode = function () {

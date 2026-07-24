@@ -12,12 +12,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=11">
+    <link rel="stylesheet" href="assets/style.css?v=14">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=11"></script>
-    <script src="assets/app.js?v=11"></script>
+    <script src="assets/firebase-config.js?v=14"></script>
+    <script src="assets/app.js?v=14"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased flex flex-col items-center justify-center px-4 py-10">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -166,9 +166,17 @@
             var selectedAvatar = existingProfile ? existingProfile.avatar : App.DEFAULT_AVATARS[0];
             var isKids = existingProfile ? existingProfile.isKids : false;
             var hasPin = existingProfile ? !!existingProfile.pin : false;
+            var hiddenGenres = existingProfile ? (existingProfile.hiddenGenres || []) : [];
 
             var avatarGrid = App.DEFAULT_AVATARS.map(function (emoji) {
                 return '<button type="button" class="avatar-choice w-14 h-14 rounded-xl flex items-center justify-center text-2xl bg-white/5 border-4 ' + (emoji === selectedAvatar ? 'border-primary' : 'border-transparent') + '" data-emoji="' + emoji + '">' + emoji + '</button>';
+            }).join('');
+
+            var genreChecks = App.HIDABLE_GENRES.map(function (g) {
+                var checked = hiddenGenres.indexOf(g.id) > -1 ? 'checked' : '';
+                return '<label class="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2 cursor-pointer text-sm">' +
+                    '<input type="checkbox" class="genre-hide-toggle w-4 h-4 accent-primary flex-shrink-0" data-genre-id="' + g.id + '" ' + checked + '>' + g.name +
+                '</label>';
             }).join('');
 
             var body = document.getElementById('profiles-body');
@@ -186,6 +194,10 @@
                         '<input id="pin-toggle" type="checkbox" class="w-5 h-5 accent-primary flex-shrink-0" ' + (hasPin ? 'checked' : '') + '>' +
                     '</label>' +
                     '<input id="pin-value-input" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" class="' + (hasPin ? '' : 'hidden') + ' w-full h-12 text-center text-xl tracking-[0.5em] bg-white/10 border border-white/20 rounded-xl outline-none focus:border-primary">' +
+                    '<div class="bg-white/5 rounded-xl px-4 py-3">' +
+                        '<p class="text-sm font-bold mb-2">Hide Genres <span class="block text-xs text-zinc-500 font-normal">Won\'t show up anywhere on this profile</span></p>' +
+                        '<div class="grid grid-cols-2 gap-2">' + genreChecks + '</div>' +
+                    '</div>' +
                     '<p id="form-error" class="hidden text-red-400 text-sm font-bold text-center"></p>' +
                     '<div class="flex gap-3 mt-1">' +
                         '<button id="form-cancel-btn" class="flex-1 h-12 rounded-xl border border-white/20 font-bold">Cancel</button>' +
@@ -214,16 +226,17 @@
                 var pinVal = document.getElementById('pin-value-input').value;
                 if (wantsPin && !/^\d{4}$/.test(pinVal)) { errEl.innerText = 'PIN must be exactly 4 digits.'; errEl.classList.remove('hidden'); return; }
                 var newIsKids = document.getElementById('kids-toggle').checked;
+                var newHiddenGenres = Array.from(document.querySelectorAll('.genre-hide-toggle:checked')).map(function (cb) { return Number(cb.getAttribute('data-genre-id')); });
 
                 var btn = document.getElementById('form-save-btn');
                 btn.disabled = true; btn.innerText = 'Saving...';
 
                 if (isNew) {
-                    App.addProfile(newName, selectedAvatar, newIsKids, wantsPin ? pinVal : null)
+                    App.addProfile(newName, selectedAvatar, newIsKids, wantsPin ? pinVal : null, newHiddenGenres)
                         .then(function () { renderPicker(); })
                         .catch(function (err) { errEl.innerText = err.message || 'Failed to add profile.'; errEl.classList.remove('hidden'); btn.disabled = false; btn.innerText = 'Save'; });
                 } else {
-                    App.editProfile(existingProfile.id, { name: newName, avatar: selectedAvatar, isKids: newIsKids, pin: wantsPin ? pinVal : null })
+                    App.editProfile(existingProfile.id, { name: newName, avatar: selectedAvatar, isKids: newIsKids, pin: wantsPin ? pinVal : null, hiddenGenres: newHiddenGenres })
                         .then(function () { manageMode = true; renderPickerKeepingMode(); })
                         .catch(function (err) { errEl.innerText = err.message || 'Failed to save profile.'; errEl.classList.remove('hidden'); btn.disabled = false; btn.innerText = 'Save'; });
                 }

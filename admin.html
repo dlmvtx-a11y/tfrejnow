@@ -12,14 +12,14 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=11">
+    <link rel="stylesheet" href="assets/style.css?v=14">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=11"></script>
-    <script src="assets/app.js?v=11"></script>
-    <script src="assets/admin.js?v=11"></script>
+    <script src="assets/firebase-config.js?v=14"></script>
+    <script src="assets/app.js?v=14"></script>
+    <script src="assets/admin.js?v=14"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -53,9 +53,19 @@
             </div>
         </div>
 
-        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5 mb-10">
-            <h2 class="text-lg font-bold text-black dark:text-white mb-4">Signups - Last 14 Days</h2>
-            <div class="h-64"><canvas id="signups-chart"></canvas></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+            <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5">
+                <h2 class="text-base font-bold text-black dark:text-white mb-4">Signups - 14 Days</h2>
+                <div class="h-52"><canvas id="signups-chart"></canvas></div>
+            </div>
+            <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5">
+                <h2 class="text-base font-bold text-black dark:text-white mb-4">Active Users - 14 Days</h2>
+                <div class="h-52"><canvas id="active-users-chart"></canvas></div>
+            </div>
+            <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5">
+                <h2 class="text-base font-bold text-black dark:text-white mb-4">Watch Events - 14 Days</h2>
+                <div class="h-52"><canvas id="watch-events-chart"></canvas></div>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -71,6 +81,11 @@
                 <h2 class="text-lg font-bold text-black dark:text-white mb-3">Recent Activity</h2>
                 <div id="recent-activity-list" class="max-h-80 overflow-y-auto custom-scrollbar"></div>
             </div>
+        </div>
+
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5 mt-6">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-3">Server Reports</h2>
+            <div id="server-reports-list" class="max-h-80 overflow-y-auto custom-scrollbar"></div>
         </div>
     </section>
 

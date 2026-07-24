@@ -12,12 +12,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=11">
+    <link rel="stylesheet" href="assets/style.css?v=14">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=11"></script>
-    <script src="assets/app.js?v=11"></script>
+    <script src="assets/firebase-config.js?v=14"></script>
+    <script src="assets/app.js?v=14"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -28,7 +28,10 @@
     <div id="nav-root"></div>
 
     <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-2xl px-4 md:px-8 w-full flex-1">
-        <h1 class="text-2xl font-black text-black dark:text-white mb-8 border-l-4 border-primary pl-3">My Profile</h1>
+        <div class="flex items-center justify-between mb-8 flex-wrap gap-3">
+            <h1 class="text-2xl font-black text-black dark:text-white border-l-4 border-primary pl-3">My Profile</h1>
+            <a href="stats.html" class="text-sm font-bold text-primary hover:underline">📊 My Stats</a>
+        </div>
 
         <!-- Username -->
         <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 mb-6">
@@ -94,6 +97,15 @@
             </label>
         </div>
 
+        <!-- Login Activity -->
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-1">Login Activity</h2>
+            <p class="text-xs text-zinc-500 mb-4">Everywhere your account has recently signed in.</p>
+            <div id="login-activity-list" class="text-sm text-zinc-600 dark:text-zinc-400">
+                <div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        </div>
+
         <!-- Danger Zone -->
         <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-6">
             <h2 class="text-lg font-bold text-red-500 mb-1">Delete Account</h2>
@@ -119,7 +131,32 @@
             document.getElementById('current-email-display').innerText = user.email;
             document.getElementById('username-input').value = (App.userData && App.userData.username) ? App.userData.username : '';
             document.getElementById('show-recent-toggle').checked = App.userData.showRecentlyViewed !== false;
+            loadLoginActivity();
         });
+
+        function fmtLogTime(ts) {
+            if (!ts) return '—';
+            var d = ts.toDate ? ts.toDate() : new Date(ts);
+            return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        function loadLoginActivity() {
+            var el = document.getElementById('login-activity-list');
+            App._db.collection('loginLogs').where('uid', '==', App.Auth.currentUser.uid).orderBy('ts', 'desc').limit(15).get()
+                .then(function (snap) {
+                    if (snap.empty) { el.innerHTML = '<p class="text-zinc-500">No login history yet.</p>'; return; }
+                    el.innerHTML = '<ul class="space-y-2">' + snap.docs.map(function (doc) {
+                        var l = doc.data();
+                        return '<li class="flex items-center justify-between gap-3 border-b border-black/5 dark:border-white/5 pb-2 last:border-0">' +
+                            '<span class="font-bold text-black dark:text-white">' + l.browser + ' on ' + l.os + ' (' + l.device + ')</span>' +
+                            '<span class="text-xs flex-shrink-0">' + fmtLogTime(l.ts) + (l.ip ? ' · ' + l.ip : '') + '</span>' +
+                        '</li>';
+                    }).join('') + '</ul>';
+                })
+                .catch(function (e) {
+                    console.error('Failed to load login activity - often a missing Firestore index:', e);
+                    el.innerHTML = '<p class="text-red-500">Failed to load. Check the browser console for details.</p>';
+                });
+        }
 
         document.getElementById('show-recent-toggle').addEventListener('change', function (e) {
             App.setShowRecentlyViewed(e.target.checked).then(function () {

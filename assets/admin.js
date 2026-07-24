@@ -88,17 +88,22 @@ App._loadAdminOverview = function () {
     var usersP = App._db.collection('users').orderBy('createdAt', 'desc').limit(500).get().catch(function () { return { docs: [] }; });
     var logsP = App._db.collection('watchLogs').orderBy('ts', 'desc').limit(500).get().catch(function () { return { docs: [] }; });
     var searchesP = App._db.collection('searchLogs').orderBy('ts', 'desc').limit(500).get().catch(function () { return { docs: [] }; });
+    var reportsP = App._db.collection('serverReports').orderBy('ts', 'desc').limit(50).get().catch(function () { return { docs: [] }; });
 
-    Promise.all([usersP, logsP, searchesP]).then(function (results) {
+    Promise.all([usersP, logsP, searchesP, reportsP]).then(function (results) {
         var users = results[0].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
         var logs = results[1].docs.map(function (d) { return d.data(); });
         var searches = results[2].docs.map(function (d) { return d.data(); });
+        var reports = results[3].docs.map(function (d) { return d.data(); });
 
         App._renderOverviewCards(users, logs);
-        App._renderSignupsChart(users);
+        App._renderTrendChart('signups-chart', users, function (u) { return u.createdAt; }, 'New signups');
+        App._renderTrendChart('active-users-chart', users, function (u) { return u.lastActiveAt; }, 'Active users');
+        App._renderTrendChart('watch-events-chart', logs, function (l) { return l.ts; }, 'Watch events');
         App._renderMostWatched(logs);
         App._renderTopSearches(searches);
         App._renderRecentActivity(logs);
+        App._renderServerReports(reports);
     });
 };
 
@@ -129,7 +134,8 @@ App._renderOverviewCards = function (users, logs) {
     }).join('');
 };
 
-App._renderSignupsChart = function (users) {
+/* Generic 14-day trend bar chart - reused for signups, active users, and watch events */
+App._renderTrendChart = function (canvasId, items, getTimestamp, label) {
     var days = [];
     for (var i = 13; i >= 0; i--) {
         var d = new Date();
@@ -138,24 +144,38 @@ App._renderSignupsChart = function (users) {
     }
     var counts = {};
     days.forEach(function (d) { counts[d] = 0; });
-    users.forEach(function (u) {
-        var k = dayKey(u.createdAt);
+    items.forEach(function (item) {
+        var k = dayKey(getTimestamp(item));
         if (k && counts.hasOwnProperty(k)) counts[k]++;
     });
 
-    var ctx = document.getElementById('signups-chart');
+    var ctx = document.getElementById(canvasId);
     if (!ctx || typeof Chart === 'undefined') return;
     new Chart(ctx, {
         type: 'bar',
         data: {
             labels: days.map(function (d) { return d.substring(5); }),
-            datasets: [{ label: 'New signups', data: days.map(function (d) { return counts[d]; }), backgroundColor: '#6d28d9', borderRadius: 4 }]
+            datasets: [{ label: label, data: days.map(function (d) { return counts[d]; }), backgroundColor: '#6d28d9', borderRadius: 4 }]
         },
         options: {
             plugins: { legend: { display: false } },
             scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
         }
     });
+};
+
+App._renderServerReports = function (reports) {
+    var el = document.getElementById('server-reports-list');
+    if (!el) return;
+    if (!reports.length) { el.innerHTML = '<p class="text-zinc-500 text-sm py-4">No reports yet.</p>'; return; }
+    el.innerHTML = reports.map(function (r) {
+        var ep = r.mediaType === 'tv' && r.season ? ' (S' + r.season + ':E' + r.episode + ')' : '';
+        return '<div class="flex items-center justify-between py-2.5 px-3 border-b border-black/5 dark:border-white/5 last:border-0">' +
+            '<div class="min-w-0"><p class="text-sm font-bold text-black dark:text-white truncate">' + r.title + ep + ' <span class="text-primary font-normal">· ' + r.server + '</span></p>' +
+            '<p class="text-xs text-zinc-500 truncate">' + r.email + '</p></div>' +
+            '<span class="text-xs text-zinc-500 flex-shrink-0 ml-3">' + fmtDateTime(r.ts) + '</span>' +
+        '</div>';
+    }).join('');
 };
 
 App._renderMostWatched = function (logs) {
@@ -222,6 +242,76 @@ App.initAdminUsersPage = function () {
     });
 };
 
+App._wireBulkSelection = function () {
+    var bar = document.getElementById('bulk-actions-bar');
+    var countEl = document.getElementById('bulk-selected-count');
+    var selectAll = document.getElementById('select-all-checkbox');
+
+    var updateBar = function () {
+        var count = Object.keys(App._selectedUserIds).filter(function (id) { return App._selectedUserIds[id]; }).length;
+        if (count > 0) { bar.classList.remove('hidden'); bar.classList.add('flex'); countEl.innerText = count + ' selected'; }
+        else { bar.classList.add('hidden'); bar.classList.remove('flex'); }
+    };
+
+    document.querySelectorAll('.row-select-checkbox').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            App._selectedUserIds[cb.getAttribute('data-id')] = cb.checked;
+            updateBar();
+        });
+    });
+
+    if (selectAll) {
+        selectAll.checked = false;
+        selectAll.addEventListener('change', function () {
+            document.querySelectorAll('.row-select-checkbox').forEach(function (cb) {
+                cb.checked = selectAll.checked;
+                App._selectedUserIds[cb.getAttribute('data-id')] = selectAll.checked;
+            });
+            updateBar();
+        });
+    }
+
+    var clearBtn = document.getElementById('bulk-clear-btn');
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+        App._selectedUserIds = {};
+        document.querySelectorAll('.row-select-checkbox').forEach(function (cb) { cb.checked = false; });
+        if (selectAll) selectAll.checked = false;
+        updateBar();
+    });
+
+    var banBtn = document.getElementById('bulk-ban-btn');
+    if (banBtn) banBtn.addEventListener('click', function () {
+        var ids = Object.keys(App._selectedUserIds).filter(function (id) { return App._selectedUserIds[id]; });
+        if (!ids.length) return;
+        if (!confirm('Ban ' + ids.length + ' selected user(s) forever?')) return;
+        banBtn.disabled = true;
+        Promise.all(ids.map(function (id) { return App.adminBanUser(id, 'forever', 'Bulk action by admin'); }))
+            .then(function () {
+                App.showToast(ids.length + ' user(s) banned');
+                App._selectedUserIds = {};
+                App._loadAdminUsers();
+            })
+            .catch(function (e) { console.error(e); App.showToast('Some bans may have failed - check console.'); })
+            .finally(function () { banBtn.disabled = false; });
+    });
+
+    var unbanBtn = document.getElementById('bulk-unban-btn');
+    if (unbanBtn) unbanBtn.addEventListener('click', function () {
+        var ids = Object.keys(App._selectedUserIds).filter(function (id) { return App._selectedUserIds[id]; });
+        if (!ids.length) return;
+        if (!confirm('Unban ' + ids.length + ' selected user(s)?')) return;
+        unbanBtn.disabled = true;
+        Promise.all(ids.map(function (id) { return App.adminUnbanUser(id); }))
+            .then(function () {
+                App.showToast(ids.length + ' user(s) unbanned');
+                App._selectedUserIds = {};
+                App._loadAdminUsers();
+            })
+            .catch(function (e) { console.error(e); App.showToast('Some unbans may have failed - check console.'); })
+            .finally(function () { unbanBtn.disabled = false; });
+    });
+};
+
 App._loadAdminUsers = function () {
     App._db.collection('users').orderBy('createdAt', 'desc').limit(500).get().then(function (snap) {
         App._allUsers = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
@@ -232,12 +322,14 @@ App._loadAdminUsers = function () {
     });
 };
 
+App._selectedUserIds = App._selectedUserIds || {};
+
 App._renderUsersTable = function (filter) {
     var list = App._allUsers;
     if (filter) list = list.filter(function (u) { return (u.email || '').toLowerCase().indexOf(filter) > -1 || (u.username || '').toLowerCase().indexOf(filter) > -1; });
 
     var body = document.getElementById('users-table-body');
-    if (!list.length) { body.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-zinc-500">No users found.</td></tr>'; return; }
+    if (!list.length) { body.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-zinc-500">No users found.</td></tr>'; return; }
 
     body.innerHTML = list.map(function (u) {
         var wlCount = (u.watchlist || []).length;
@@ -249,9 +341,11 @@ App._renderUsersTable = function (filter) {
         else if (banned && !u.blockedUntil) statusHtml = '<span class="text-red-500 font-bold text-xs">Banned (forever)</span>';
         else if (banned) statusHtml = '<span class="text-orange-500 font-bold text-xs">Banned until ' + fmtDateTime(u.blockedUntil) + '</span>';
         else statusHtml = '<span class="text-green-500 font-bold text-xs">Active</span>';
+        var checked = App._selectedUserIds[u.id] ? 'checked' : '';
 
         return '' +
             '<tr class="border-b border-black/5 dark:border-white/5">' +
+                '<td class="py-3 px-3"><input type="checkbox" class="row-select-checkbox w-4 h-4 accent-primary cursor-pointer" data-id="' + u.id + '" ' + checked + '></td>' +
                 '<td class="py-3 px-3 font-bold text-black dark:text-white">' + (u.username ? u.username + ' <span class="text-zinc-500 font-normal">(' + u.email + ')</span>' : (u.email || '—')) + '</td>' +
                 '<td class="py-3 px-3 text-zinc-500">' + fmtDate(u.createdAt) + '</td>' +
                 '<td class="py-3 px-3 text-zinc-500">' + fmtDateTime(u.lastActiveAt) + '</td>' +
@@ -262,6 +356,8 @@ App._renderUsersTable = function (filter) {
                 '</td>' +
             '</tr>';
     }).join('');
+
+    App._wireBulkSelection();
 };
 
 /* ============================================================
@@ -383,6 +479,16 @@ App._viewUserDetail = function (uid) {
                 console.error('Failed to load watch history - check the error above for details (often a missing Firestore index):', e);
                 App._renderWatchHistorySection([], 'Failed to load watch history. Check the browser console for the specific error.');
             });
+
+        App._db.collection('loginLogs').where('uid', '==', uid).orderBy('ts', 'desc').limit(50).get()
+            .then(function (snap) {
+                var logs = snap.docs.map(function (d) { return d.data(); });
+                App._renderLoginHistorySection(logs, null);
+            })
+            .catch(function (e) {
+                console.error('Failed to load login history - check the error above for details (often a missing Firestore index):', e);
+                App._renderLoginHistorySection([], 'Failed to load login history. Check the browser console for the specific error.');
+            });
     }).catch(function (e) {
         console.error('Failed to load user', e);
         body.innerHTML = '<p class="text-red-500">Failed to load user. Check the browser console for the specific error.</p>';
@@ -469,10 +575,13 @@ App._renderUserDetailBody = function (u, logs) {
             '<ul id="admin-restricted-list" class="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">' + restrictedHtml + '</ul>' +
         '</div>' +
 
-        '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm mb-8">' +
+        '<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm mb-8">' +
             '<div><h4 class="font-bold text-black dark:text-white mb-2">Profiles</h4><ul class="space-y-1.5 text-zinc-600 dark:text-zinc-400">' + profilesHtml + '</ul></div>' +
             '<div><h4 id="admin-history-heading" class="font-bold text-black dark:text-white mb-2">Watch History</h4>' +
                 '<div id="admin-history-body" class="text-zinc-600 dark:text-zinc-400"><div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>' +
+            '</div>' +
+            '<div><h4 id="admin-login-heading" class="font-bold text-black dark:text-white mb-2">Recent Logins</h4>' +
+                '<div id="admin-login-body" class="text-zinc-600 dark:text-zinc-400"><div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>' +
             '</div>' +
         '</div>' +
 
@@ -510,6 +619,24 @@ App._renderWatchHistorySection = function (logs, errorMsg) {
         }).join('')
         : '<li class="text-zinc-500">No watch history logged</li>';
     el.innerHTML = '<ul class="space-y-1 text-sm max-h-64 overflow-y-auto custom-scrollbar pr-2">' + logsHtml + '</ul>';
+};
+
+App._renderLoginHistorySection = function (logs, errorMsg) {
+    var heading = document.getElementById('admin-login-heading');
+    var el = document.getElementById('admin-login-body');
+    if (!el) return; // modal was closed before this resolved
+    if (errorMsg) {
+        el.innerHTML = '<p class="text-red-500 text-xs">' + errorMsg + '</p>';
+        return;
+    }
+    if (heading) heading.innerText = 'Recent Logins (' + logs.length + ')';
+    var logsHtml = logs.length
+        ? logs.map(function (l) {
+            return '<li>' + l.browser + ' · ' + l.os + ' (' + l.device + ')' +
+                '<span class="text-zinc-500 block text-xs">' + fmtDateTime(l.ts) + (l.ip ? ' · ' + l.ip : '') + '</span></li>';
+        }).join('')
+        : '<li class="text-zinc-500">No login history logged</li>';
+    el.innerHTML = '<ul class="space-y-2 text-sm max-h-64 overflow-y-auto custom-scrollbar pr-2">' + logsHtml + '</ul>';
 };
 
 App._wireUserDetailActions = function (u) {

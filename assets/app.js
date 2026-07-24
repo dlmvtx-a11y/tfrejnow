@@ -24,6 +24,48 @@ App.NO_STILL = 'https://placehold.co/300x170/222222/666666?text=No+Image';
 App.CACHE_TTL = 8 * 60 * 1000;
 App.HERO_ROTATE_MS = 6000;
 
+/* ---------- LOGIN / DEVICE ACTIVITY LOGGING ---------- */
+App._parseUserAgent = function (ua) {
+    ua = ua || '';
+    var device = 'Desktop';
+    if (/iPad|Tablet/i.test(ua)) device = 'Tablet';
+    else if (/Mobi|Android/i.test(ua)) device = 'Mobile';
+
+    var os = 'Unknown OS';
+    if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+    else if (/Mac OS X/i.test(ua)) os = 'macOS';
+    else if (/Android/i.test(ua)) os = 'Android';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+
+    var browser = 'Unknown Browser';
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/SamsungBrowser/i.test(ua)) browser = 'Samsung Internet';
+    else if (/OPR\//i.test(ua)) browser = 'Opera';
+    else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+    else if (/Safari\//i.test(ua)) browser = 'Safari';
+
+    return { device: device, os: os, browser: browser };
+};
+
+/* Logs one entry per actual sign-in (not every page nav) - called from login.html
+   right after a successful sign-in. */
+App.logLoginEvent = function () {
+    if (!App.Auth.currentUser || !App._db) return Promise.resolve();
+    var info = App._parseUserAgent(navigator.userAgent);
+    return App.fetchClientIp().then(function (ip) {
+        return App._db.collection('loginLogs').add({
+            uid: App.Auth.currentUser.uid,
+            email: App.Auth.currentUser.email,
+            ip: ip || null,
+            device: info.device, os: info.os, browser: info.browser,
+            userAgent: navigator.userAgent,
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    }).catch(function (e) { console.error('logLoginEvent failed', e); });
+};
+
 App.GENRES = [
     {label:'Action', m:28, t:10759}, {label:'Adventure', m:12, t:10759},
     {label:'Animation', m:16, t:16}, {label:'Comedy', m:35, t:35},
@@ -578,10 +620,29 @@ App.isKidsProfile = function () {
     var p = App.getActiveProfile();
     return !!(p && p.isKids);
 };
-App.addProfile = function (name, avatar, isKids, pin) {
+App.HIDABLE_GENRES = [
+    { id: 27, name: 'Horror' }, { id: 53, name: 'Thriller' }, { id: 80, name: 'Crime' },
+    { id: 10752, name: 'War' }, { id: 9648, name: 'Mystery' }, { id: 99, name: 'Documentary' }
+];
+App.filterHiddenGenres = function (results) {
+    var p = App.getActiveProfile();
+    var hidden = (p && p.hiddenGenres) || [];
+    if (!hidden.length) return results;
+    return results.filter(function (item) {
+        var ids = item.genre_ids || (item.genres ? item.genres.map(function (g) { return g.id; }) : []);
+        return !ids.some(function (g) { return hidden.indexOf(g) > -1; });
+    });
+};
+/* Combines kids-safety filtering with this profile's own "hide this genre"
+   preferences - use this everywhere content gets filtered, instead of
+   calling filterKidsSafe directly. */
+App.applyProfileFilters = function (results) {
+    return App.filterHiddenGenres(App.filterKidsSafe(results));
+};
+App.addProfile = function (name, avatar, isKids, pin, hiddenGenres) {
     if (App._rawProfiles.length >= App.MAX_PROFILES) return Promise.reject({ message: 'Maximum ' + App.MAX_PROFILES + ' profiles allowed.' });
     var id = 'p' + Date.now();
-    App._rawProfiles.push({ id: id, name: name, avatar: avatar, isKids: !!isKids, pin: pin || null, createdAt: Date.now() });
+    App._rawProfiles.push({ id: id, name: name, avatar: avatar, isKids: !!isKids, pin: pin || null, hiddenGenres: hiddenGenres || [], createdAt: Date.now() });
     App._rawProfileData[id] = { watchlist: [], progress: {}, recent: [] };
     return App._db.collection('users').doc(App.Auth.currentUser.uid)
         .set({ profiles: App._rawProfiles, profileData: App._rawProfileData }, { merge: true })
@@ -673,6 +734,13 @@ App.selfDeleteAccount = function (currentPassword) {
     });
 };
 
+App.registerServiceWorker = function () {
+    if (App._swRegistered || !('serviceWorker' in navigator)) return;
+    App._swRegistered = true;
+    var swPath = location.pathname.replace(/[^/]*$/, '') + 'sw.js';
+    navigator.serviceWorker.register(swPath).catch(function (e) { console.error('Service worker registration failed', e); });
+};
+
 App.injectPwaManifest = function () {
     if (App._pwaInjected) return;
     App._pwaInjected = true;
@@ -728,6 +796,7 @@ App.renderAnnouncementBanner = function () {
 
 App.renderNav = function (activeHref) {
     App.injectPwaManifest();
+    App.registerServiceWorker();
     var root = document.getElementById('nav-root');
     if (!root) return;
     root.innerHTML =
