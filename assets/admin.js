@@ -219,6 +219,10 @@ App._renderUsersTable = function (filter) {
 /* ============================================================
    ADMIN ACTIONS ON A USER
    ============================================================ */
+App.adminApproveUser = function (uid, email) {
+    return App._db.collection('users').doc(uid).set({ approved: true, approvedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+        .then(function () { return App.sendUserApprovedEmail(email); });
+};
 App.adminBanUser = function (uid, durationDaysOrDate, reason) {
     var data = { blocked: true, banReason: reason || null };
     if (durationDaysOrDate === 'forever') {
@@ -325,14 +329,19 @@ App._viewUserDetail = function (uid) {
 App._renderUserDetailBody = function (u, logs) {
     var body = document.getElementById('user-detail-body');
     var banned = App.isCurrentlyBanned(u);
+    var pending = u.approved === false;
     var lastIp = u.lastIp || '—';
 
-    var watchlistHtml = (u.watchlist || []).length
-        ? u.watchlist.map(function (w) { return '<li>' + (w.title || w.name) + '</li>'; }).join('')
-        : '<li class="text-zinc-500">Empty</li>';
-    var progressHtml = Object.keys(u.progress || {}).length
-        ? Object.keys(u.progress).map(function (k) { var p = u.progress[k]; return '<li>' + p.title + (p.media_type === 'movie' ? ' - Started (movie)' : ' - S' + p.season + ':E' + p.episode) + '</li>'; }).join('')
-        : '<li class="text-zinc-500">None</li>';
+    var profiles = u.profiles || [];
+    var profileData = u.profileData || {};
+    var profilesHtml = profiles.length
+        ? profiles.map(function (p) {
+            var pd = profileData[p.id] || {};
+            var wl = (pd.watchlist || []).length;
+            var prog = Object.keys(pd.progress || {}).length;
+            return '<li>' + (p.avatar || '👤') + ' <strong>' + p.name + '</strong>' + (p.isKids ? ' <span class="text-[10px] text-primary font-bold">KIDS</span>' : '') + ' — ' + wl + ' saved, ' + prog + ' in progress</li>';
+        }).join('')
+        : '<li class="text-zinc-500">No profiles yet (account not activated)</li>';
     var restrictedHtml = (u.restrictedTitles || []).length
         ? u.restrictedTitles.map(function (r) {
             return '<li class="flex items-center justify-between gap-2"><span>' + r.title + '</span>' +
@@ -341,11 +350,19 @@ App._renderUserDetailBody = function (u, logs) {
         : '<li class="text-zinc-500">No restrictions</li>';
 
     body.innerHTML =
-        '<div class="flex items-start justify-between gap-4 mb-1">' +
+        '<div class="flex items-start justify-between gap-4 mb-1 flex-wrap">' +
             '<h3 class="text-xl font-black text-black dark:text-white">' + (u.username || u.email || '—') + '</h3>' +
-            (banned ? '<span class="text-xs font-bold px-2 py-1 rounded bg-red-500/10 text-red-500">' + (u.blockedUntil ? 'Banned until ' + fmtDateTime(u.blockedUntil) : 'Banned forever') + '</span>' : '<span class="text-xs font-bold px-2 py-1 rounded bg-green-500/10 text-green-500">Active</span>') +
+            '<div class="flex gap-2">' +
+                (pending ? '<span class="text-xs font-bold px-2 py-1 rounded bg-yellow-500/10 text-yellow-500">Pending Approval</span>' : '') +
+                (banned ? '<span class="text-xs font-bold px-2 py-1 rounded bg-red-500/10 text-red-500">' + (u.blockedUntil ? 'Banned until ' + fmtDateTime(u.blockedUntil) : 'Banned forever') + '</span>' : (!pending ? '<span class="text-xs font-bold px-2 py-1 rounded bg-green-500/10 text-green-500">Active</span>' : '')) +
+            '</div>' +
         '</div>' +
         '<p class="text-xs text-zinc-500 mb-6">' + u.email + ' · Joined ' + fmtDate(u.createdAt) + ' · Last active ' + fmtDateTime(u.lastActiveAt) + ' · Last IP: ' + lastIp + '</p>' +
+
+        (pending ? '<div class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-8 flex items-center justify-between gap-4 flex-wrap">' +
+            '<p class="text-sm text-yellow-600 dark:text-yellow-400 font-bold">This account can\'t sign in until you approve it.</p>' +
+            '<button id="admin-approve-btn" class="bg-primary text-white text-sm font-bold px-5 py-2.5 rounded-xl">Approve Account</button>' +
+        '</div>' : '') +
 
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">' +
             '<div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">' +
@@ -389,9 +406,8 @@ App._renderUserDetailBody = function (u, logs) {
             '<ul id="admin-restricted-list" class="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">' + restrictedHtml + '</ul>' +
         '</div>' +
 
-        '<div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm mb-8">' +
-            '<div><h4 class="font-bold text-black dark:text-white mb-2">My List</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + watchlistHtml + '</ul></div>' +
-            '<div><h4 class="font-bold text-black dark:text-white mb-2">Continue Watching</h4><ul class="space-y-1 text-zinc-600 dark:text-zinc-400">' + progressHtml + '</ul></div>' +
+        '<div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm mb-8">' +
+            '<div><h4 class="font-bold text-black dark:text-white mb-2">Profiles</h4><ul class="space-y-1.5 text-zinc-600 dark:text-zinc-400">' + profilesHtml + '</ul></div>' +
             '<div><h4 id="admin-history-heading" class="font-bold text-black dark:text-white mb-2">Watch History</h4>' +
                 '<div id="admin-history-body" class="text-zinc-600 dark:text-zinc-400"><div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>' +
             '</div>' +
@@ -430,6 +446,20 @@ App._renderWatchHistorySection = function (logs, errorMsg) {
 App._wireUserDetailActions = function (u) {
     var refreshTable = function () { App._renderUsersTable(document.getElementById('user-search-input').value.trim().toLowerCase()); };
     var reopen = function () { App._viewUserDetail(u.id); };
+
+    var approveBtn = document.getElementById('admin-approve-btn');
+    if (approveBtn) approveBtn.addEventListener('click', function () {
+        approveBtn.disabled = true; approveBtn.innerText = 'Approving...';
+        App.adminApproveUser(u.id, u.email).then(function () {
+            u.approved = true;
+            App.showToast('Account approved - confirmation email sent to ' + u.email);
+            refreshTable(); reopen();
+        }).catch(function (e) {
+            console.error(e);
+            App.showToast('Failed to approve account.');
+            approveBtn.disabled = false; approveBtn.innerText = 'Approve Account';
+        });
+    });
 
     document.getElementById('admin-username-save-btn').addEventListener('click', function () {
         var val = document.getElementById('admin-username-input').value.trim();

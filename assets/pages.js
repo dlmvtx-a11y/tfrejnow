@@ -19,7 +19,7 @@ App.initHomePage = function () {
     document.getElementById('trending-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/trending/all/day?api_key=' + App.API_KEY)
         .then(function (data) {
-            var results = data.results || [];
+            var results = App.filterKidsSafe(data.results || []);
             App.renderCards(results.slice(0, 10), 'trending-results');
             App._heroItems = results.slice(0, 5);
             if (App._heroItems.length) { App.renderHeroDots(); App.showHero(0); App.startHeroRotation(); }
@@ -55,13 +55,13 @@ App.initHomePage = function () {
 App.fetchMoviesRow = function () {
     document.getElementById('movies-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/discover/movie?api_key=' + App.API_KEY + '&sort_by=popularity.desc')
-        .then(function (d) { App.renderCards((d.results || []).slice(0, 10), 'movies-results', 'movie'); })
+        .then(function (d) { App.renderCards(App.filterKidsSafe(d.results || []).slice(0, 10), 'movies-results', 'movie'); })
         .catch(function () { document.getElementById('movies-results').innerHTML = App.retryHtml('movies-results', 'App.fetchMoviesRow'); });
 };
 App.fetchTvRow = function () {
     document.getElementById('tv-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/discover/tv?api_key=' + App.API_KEY + '&sort_by=popularity.desc')
-        .then(function (d) { App.renderCards((d.results || []).slice(0, 10), 'tv-results', 'tv'); })
+        .then(function (d) { App.renderCards(App.filterKidsSafe(d.results || []).slice(0, 10), 'tv-results', 'tv'); })
         .catch(function () { document.getElementById('tv-results').innerHTML = App.retryHtml('tv-results', 'App.fetchTvRow'); });
 };
 App.fetchAnimeRow = function () {
@@ -255,6 +255,7 @@ App._runBrowse = function (pageFetcher, noAutoLoad) {
 App._loadBrowsePage = function (isNew) {
     if (!App._browseFetcher) return Promise.resolve();
     return App._browseFetcher(App._browsePage).then(function (combined) {
+        combined = App.filterKidsSafe(combined);
         document.getElementById('browse-loading').classList.add('hidden');
         if (isNew) document.getElementById('browse-results').innerHTML = '';
         if (isNew && combined.length === 0) {

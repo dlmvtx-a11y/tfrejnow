@@ -5,18 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sign Up - TfrejNOW</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236d28d9'/><text y='68' x='50' font-size='60' text-anchor='middle' fill='white'>🍿</text></svg>">
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <meta name="theme-color" content="#6d28d9">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=5">
+    <link rel="stylesheet" href="assets/style.css?v=6">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=5"></script>
-    <script src="assets/app.js?v=5"></script>
+    <script src="assets/firebase-config.js?v=6"></script>
+    <script src="assets/app.js?v=6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased flex flex-col items-center justify-center px-4">
     <a href="index.html" class="mb-8"><span class="text-3xl font-black tracking-tighter text-black dark:text-white">Tfrej<span class="text-primary">NOW</span></span></a>
@@ -44,6 +46,7 @@
 
     <script>
         App.initFirebase();
+        App.initEmailJS();
         var form = document.getElementById('signup-form');
         var errorEl = document.getElementById('signup-error');
         var submitBtn = document.getElementById('signup-submit');
@@ -56,10 +59,23 @@
             submitBtn.disabled = true;
             submitBtn.innerText = 'Creating account...';
 
-            App.signUp(email, password).then(function () {
-                var params = new URLSearchParams(location.search);
-                var ret = params.get('return');
-                location.href = ret ? decodeURIComponent(ret) : 'index.html';
+            App.signUp(email, password).then(function (cred) {
+                // Mark as pending approval right away - the account exists but can't
+                // access anything until an admin approves it.
+                return App._db.collection('users').doc(cred.user.uid).set({
+                    email: email,
+                    approved: false,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    profiles: [], profileData: {},
+                    watchlist: [], progress: {}, recent: [], restrictedTitles: [],
+                    blocked: false, blockedUntil: null
+                }, { merge: true }).then(function () {
+                    App.sendAdminApprovalEmail(email);
+                    return firebase.auth().signOut();
+                }).then(function () {
+                    location.href = 'pending-approval.html';
+                });
             }).catch(function (err) {
                 submitBtn.disabled = false;
                 submitBtn.innerText = 'Create Account';

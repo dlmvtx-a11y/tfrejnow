@@ -274,6 +274,12 @@ App.gateSiteAccess = function () {
             location.href = 'login.html?return=' + returnTo;
             return;
         }
+        if (!App.userData.approved) {
+            firebase.auth().signOut().finally(function () {
+                location.href = 'pending-approval.html';
+            });
+            return;
+        }
         if (App.isCurrentlyBanned(App.userData)) {
             var untilText = App.userData.blockedUntil ? '&until=' + encodeURIComponent(fsDateToIso(App.userData.blockedUntil)) : '&forever=1';
             var reasonText = App.userData.banReason ? '&reason=' + encodeURIComponent(App.userData.banReason) : '';
@@ -284,6 +290,11 @@ App.gateSiteAccess = function () {
         }
         if (overlay) overlay.remove();
         App.maybeShowAdminLink();
+
+        // Profile picker gate - runs only once sign-in/approval/ban checks all pass.
+        if (!App.activeProfileId && location.pathname.indexOf('profiles.html') === -1) {
+            location.href = 'profiles.html';
+        }
     });
 };
 function fsDateToIso(ts) {
@@ -298,6 +309,40 @@ App.isCurrentlyBanned = function (u) {
     try { untilMs = u.blockedUntil.toDate ? u.blockedUntil.toDate().getTime() : new Date(u.blockedUntil).getTime(); }
     catch (e) { return true; }
     return untilMs > Date.now();
+};
+
+/* ============================================================
+   EMAILJS (no backend needed - sends the two approval-flow emails)
+   ============================================================ */
+App.EMAILJS_PUBLIC_KEY = '0tUC70JTDh4REwT8E';
+App.EMAILJS_SERVICE_ID = 'service_pe3p5jq';
+App.EMAILJS_TEMPLATE_ADMIN_NOTIFY = 'template_w3aqipm';
+App.EMAILJS_TEMPLATE_USER_APPROVED = 'template_oaa6vzz';
+
+App._emailjsInit = false;
+App.initEmailJS = function () {
+    if (window.emailjs && !App._emailjsInit) {
+        emailjs.init({ publicKey: App.EMAILJS_PUBLIC_KEY });
+        App._emailjsInit = true;
+    }
+};
+App._siteBaseUrl = function () {
+    return location.origin + location.pathname.replace(/[^/]+$/, '');
+};
+App.sendAdminApprovalEmail = function (userEmail) {
+    if (!window.emailjs) return Promise.resolve();
+    return emailjs.send(App.EMAILJS_SERVICE_ID, App.EMAILJS_TEMPLATE_ADMIN_NOTIFY, {
+        user_email: userEmail,
+        signup_date: new Date().toLocaleString(),
+        approve_link: App._siteBaseUrl() + 'admin-users.html'
+    }).catch(function (e) { console.error('admin notify email failed', e); });
+};
+App.sendUserApprovedEmail = function (userEmail) {
+    if (!window.emailjs) return Promise.resolve();
+    return emailjs.send(App.EMAILJS_SERVICE_ID, App.EMAILJS_TEMPLATE_USER_APPROVED, {
+        to_email: userEmail,
+        login_link: App._siteBaseUrl() + 'login.html'
+    }).catch(function (e) { console.error('user approved email failed', e); });
 };
 
 /* ============================================================
@@ -402,45 +447,136 @@ App.requireAuth = function () {
 /* ============================================================
    USER DATA (Firestore-backed: watchlist, continue-watching progress, recently viewed)
    ============================================================ */
-App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
+App.MAX_PROFILES = 5;
+App.DEFAULT_AVATARS = ['🎬', '🍿', '👾', '🚀', '🦁', '🐉', '🎮', '⚡', '🌟', '🦊', '🐺', '🎨'];
+App.AVATAR_COLORS = ['#6d28d9', '#dc2626', '#0891b2', '#ca8a04', '#16a34a', '#db2777', '#4f46e5', '#ea580c'];
+
+App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [], approved: true };
 App._userDataLoaded = false;
+App._rawProfiles = [];      // profile metadata: [{id, name, avatar, isKids, pin, createdAt}]
+App._rawProfileData = {};   // per-profile data: { [profileId]: {watchlist, progress, recent} }
+App.activeProfileId = null;
 
 App.loadUserData = function () {
     if (!App.Auth.currentUser) return Promise.resolve(App.userData);
     var ref = App._db.collection('users').doc(App.Auth.currentUser.uid);
     return ref.get()
         .then(function (doc) {
-            if (doc.exists) {
-                var d = doc.data();
-                App.userData = {
-                    watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [],
-                    blocked: !!d.blocked, blockedUntil: d.blockedUntil || null, banReason: d.banReason || null,
-                    restrictedTitles: d.restrictedTitles || [], username: d.username || '',
-                    showRecentlyViewed: d.showRecentlyViewed !== false
-                };
-            } else {
-                App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
+            var d = doc.exists ? doc.data() : {};
+            App.userData.blocked = !!d.blocked;
+            App.userData.blockedUntil = d.blockedUntil || null;
+            App.userData.banReason = d.banReason || null;
+            App.userData.restrictedTitles = d.restrictedTitles || [];
+            App.userData.username = d.username || '';
+            App.userData.showRecentlyViewed = d.showRecentlyViewed !== false;
+            App.userData.approved = d.approved !== false; // undefined (legacy accounts) or true => approved
+
+            var profiles = d.profiles;
+            var profileData = d.profileData || {};
+            var needsMigration = !profiles || !profiles.length;
+            if (needsMigration) {
+                // First time this account sees the profile system - turn their existing
+                // single account into "Profile 1" so nothing they had is lost.
+                var legacyId = 'p1';
+                profiles = [{ id: legacyId, name: d.username || 'Profile 1', avatar: App.DEFAULT_AVATARS[0], isKids: false, pin: null, createdAt: Date.now() }];
+                profileData[legacyId] = { watchlist: d.watchlist || [], progress: d.progress || {}, recent: d.recent || [] };
             }
+            App._rawProfiles = profiles;
+            App._rawProfileData = profileData;
+
+            var savedProfileId = localStorage.getItem('tfrej_profile_' + App.Auth.currentUser.uid);
+            App.activeProfileId = (savedProfileId && profiles.some(function (p) { return p.id === savedProfileId; })) ? savedProfileId : null;
+            App._applyActiveProfileData();
+
             App._userDataLoaded = true;
-            // Fire-and-forget: keep a lightweight profile record for the admin dashboard
-            // (email, join date, last-active, best-effort IP). Never blocks rendering.
+
+            var writePayload = {
+                email: App.Auth.currentUser.email,
+                createdAt: doc.exists && d.createdAt ? d.createdAt : firebase.firestore.FieldValue.serverTimestamp(),
+                lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (needsMigration) { writePayload.profiles = profiles; writePayload.profileData = profileData; }
             App.fetchClientIp().then(function (ip) {
-                ref.set({
-                    email: App.Auth.currentUser.email,
-                    createdAt: doc.exists && doc.data().createdAt ? doc.data().createdAt : firebase.firestore.FieldValue.serverTimestamp(),
-                    lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    lastIp: ip || null
-                }, { merge: true }).catch(function (e) { console.error('profile update failed', e); });
+                writePayload.lastIp = ip || null;
+                ref.set(writePayload, { merge: true }).catch(function (e) { console.error('profile update failed', e); });
             });
+
             return App.userData;
         })
         .catch(function (e) { console.error('loadUserData failed', e); App._userDataLoaded = true; return App.userData; });
 };
+
+App._applyActiveProfileData = function () {
+    var pd = (App.activeProfileId && App._rawProfileData[App.activeProfileId]) || {};
+    App.userData.watchlist = pd.watchlist || [];
+    App.userData.progress = pd.progress || {};
+    App.userData.recent = pd.recent || [];
+};
+
 App.saveUserData = function () {
     if (!App.Auth.currentUser) return Promise.resolve();
+    if (App.activeProfileId) {
+        App._rawProfileData[App.activeProfileId] = {
+            watchlist: App.userData.watchlist, progress: App.userData.progress, recent: App.userData.recent
+        };
+    }
+    return App._db.collection('users').doc(App.Auth.currentUser.uid).set({
+        blocked: App.userData.blocked, blockedUntil: App.userData.blockedUntil, banReason: App.userData.banReason,
+        restrictedTitles: App.userData.restrictedTitles, username: App.userData.username,
+        showRecentlyViewed: App.userData.showRecentlyViewed,
+        profiles: App._rawProfiles, profileData: App._rawProfileData
+    }, { merge: true }).catch(function (e) { console.error('saveUserData failed', e); });
+};
+
+/* ---------- PROFILES ---------- */
+/* ---------- KIDS MODE CONTENT FILTERING ---------- */
+App.KIDS_SAFE_GENRES = [10751, 16]; // Family, Animation
+App.filterKidsSafe = function (results) {
+    if (!App.isKidsProfile()) return results;
+    return results.filter(function (item) {
+        var ids = item.genre_ids || (item.genres ? item.genres.map(function (g) { return g.id; }) : []);
+        return ids.some(function (g) { return App.KIDS_SAFE_GENRES.indexOf(g) > -1; });
+    });
+};
+
+App.getActiveProfile = function () {
+    return App._rawProfiles.filter(function (p) { return p.id === App.activeProfileId; })[0] || null;
+};
+App.isKidsProfile = function () {
+    var p = App.getActiveProfile();
+    return !!(p && p.isKids);
+};
+App.addProfile = function (name, avatar, isKids, pin) {
+    if (App._rawProfiles.length >= App.MAX_PROFILES) return Promise.reject({ message: 'Maximum ' + App.MAX_PROFILES + ' profiles allowed.' });
+    var id = 'p' + Date.now();
+    App._rawProfiles.push({ id: id, name: name, avatar: avatar, isKids: !!isKids, pin: pin || null, createdAt: Date.now() });
+    App._rawProfileData[id] = { watchlist: [], progress: {}, recent: [] };
     return App._db.collection('users').doc(App.Auth.currentUser.uid)
-        .set(App.userData, { merge: true })
-        .catch(function (e) { console.error('saveUserData failed', e); });
+        .set({ profiles: App._rawProfiles, profileData: App._rawProfileData }, { merge: true })
+        .then(function () { return id; });
+};
+App.editProfile = function (id, changes) {
+    var p = App._rawProfiles.filter(function (x) { return x.id === id; })[0];
+    if (!p) return Promise.reject({ message: 'Profile not found.' });
+    Object.assign(p, changes);
+    return App._db.collection('users').doc(App.Auth.currentUser.uid).set({ profiles: App._rawProfiles }, { merge: true });
+};
+App.deleteProfile = function (id) {
+    if (App._rawProfiles.length <= 1) return Promise.reject({ message: "Can't delete your only profile." });
+    App._rawProfiles = App._rawProfiles.filter(function (x) { return x.id !== id; });
+    delete App._rawProfileData[id];
+    return App._db.collection('users').doc(App.Auth.currentUser.uid)
+        .set({ profiles: App._rawProfiles, profileData: App._rawProfileData }, { merge: true });
+};
+App.selectProfile = function (id) {
+    App.activeProfileId = id;
+    localStorage.setItem('tfrej_profile_' + App.Auth.currentUser.uid, id);
+    App._applyActiveProfileData();
+};
+App.switchProfile = function () {
+    App.activeProfileId = null;
+    localStorage.removeItem('tfrej_profile_' + App.Auth.currentUser.uid);
+    location.href = 'profiles.html';
 };
 
 App.toggleWatchlist = function (item, mediaType) {
@@ -568,8 +704,14 @@ App.renderAuthNav = function () {
     var user = App.Auth.currentUser;
     if (user) {
         var displayName = (App.userData && App.userData.username) ? App.userData.username : user.email;
-        if (deskSlot) deskSlot.innerHTML = '<a href="profile.html" class="text-xs font-bold text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate hover:text-primary transition-colors">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
-        if (mobSlot) mobSlot.innerHTML = '<a href="profile.html" class="block px-6 py-3.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 truncate hover:text-primary transition-colors">' + displayName + ' (Edit Profile)</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
+        var activeProfile = App.getActiveProfile ? App.getActiveProfile() : null;
+        var profileChip = activeProfile
+            ? '<button onclick="App.switchProfile()" class="flex items-center gap-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary transition-colors" title="Switch Profile">' +
+                '<span class="w-6 h-6 rounded-md bg-primary/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
+              '</button>'
+            : '';
+        if (deskSlot) deskSlot.innerHTML = profileChip + '<a href="profile.html" class="text-xs font-bold text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate hover:text-primary transition-colors">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
+        if (mobSlot) mobSlot.innerHTML = (activeProfile ? '<button onclick="App.switchProfile()" class="w-full text-left px-6 py-3.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary transition-colors">' + activeProfile.avatar + ' ' + activeProfile.name + ' (Switch Profile)</button>' : '') + '<a href="profile.html" class="block px-6 py-3.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 truncate hover:text-primary transition-colors">' + displayName + ' (Edit Account)</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
     } else {
         if (deskSlot) deskSlot.innerHTML = '<a href="login.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign In</a><a href="signup.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-primary text-white hover:bg-primary/80">Sign Up</a>';
         if (mobSlot) mobSlot.innerHTML = '<a href="login.html" class="block px-6 py-3.5 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">Sign In</a><a href="signup.html" class="block px-6 py-3.5 text-sm font-bold text-primary hover:bg-primary hover:text-white">Sign Up</a>';
