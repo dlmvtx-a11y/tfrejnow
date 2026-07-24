@@ -12,12 +12,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=9">
+    <link rel="stylesheet" href="assets/style.css?v=10">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=9"></script>
-    <script src="assets/app.js?v=9"></script>
+    <script src="assets/firebase-config.js?v=10"></script>
+    <script src="assets/app.js?v=10"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased flex flex-col items-center justify-center px-4">
@@ -28,6 +28,11 @@
         <p class="text-sm text-zinc-500 mb-6">Sign up to watch and save your list across devices.</p>
 
         <form id="signup-form" class="flex flex-col gap-4">
+            <div>
+                <label class="text-xs font-bold text-zinc-500 uppercase">Username</label>
+                <input id="signup-username" type="text" required maxlength="20" autocomplete="nickname" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
+                <p class="text-[11px] text-zinc-500 mt-1">This becomes your main profile's name too.</p>
+            </div>
             <div>
                 <label class="text-xs font-bold text-zinc-500 uppercase">Email</label>
                 <input id="signup-email" type="email" required autocomplete="email" class="w-full h-12 mt-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary transition-colors">
@@ -54,20 +59,27 @@
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             errorEl.classList.add('hidden');
+            var username = document.getElementById('signup-username').value.trim();
             var email = document.getElementById('signup-email').value.trim();
             var password = document.getElementById('signup-password').value;
+            if (!username) { errorEl.innerText = 'Please choose a username.'; errorEl.classList.remove('hidden'); return; }
             submitBtn.disabled = true;
             submitBtn.innerText = 'Creating account...';
 
             App.signUp(email, password).then(function (cred) {
+                var mainProfileId = 'p' + Date.now();
                 // Mark as pending approval right away - the account exists but can't
-                // access anything until an admin approves it.
+                // access anything until an admin approves it. The first profile is
+                // auto-created using their chosen username, so there's no extra
+                // "add a profile" step the first time they're approved and sign in.
                 return App._db.collection('users').doc(cred.user.uid).set({
                     email: email,
+                    username: username,
                     approved: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    profiles: [], profileData: {},
+                    profiles: [{ id: mainProfileId, name: username, avatar: '🎬', isKids: false, pin: null, createdAt: Date.now() }],
+                    profileData: { [mainProfileId]: { watchlist: [], progress: {}, recent: [] } },
                     watchlist: [], progress: {}, recent: [], restrictedTitles: [],
                     blocked: false, blockedUntil: null
                 }, { merge: true }).then(function () {

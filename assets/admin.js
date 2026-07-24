@@ -258,17 +258,18 @@ App.adminWipeUserData = function (uid) {
 };
 /* "Delete" without a backend can't remove the Firebase Auth login itself -
    that requires the Admin SDK, which can only run on a server. This is the
-   closest equivalent achievable client-side: wipes everything Wipe Data does,
-   PLUS permanently bans them so they can never sign in or access anything
-   again - functionally gone, even though an empty login shell technically
-   still exists in Firebase Auth until manually removed from the console. */
-App.adminDeleteAccountEntirely = function (uid) {
-    return App._db.collection('users').doc(uid).set({
-        watchlist: [], progress: {}, recent: [], restrictedTitles: [],
-        profiles: [], profileData: {},
-        blocked: true, blockedUntil: null, banReason: 'Account deleted by admin',
+   closest real equivalent: the account document is deleted entirely (so it's
+   gone from the admin list, matching "removed"), and a tiny tombstone record
+   permanently blocks that UID from ever accessing the site again - without
+   the tombstone, they could sign back in with their still-existing password
+   and get a brand-new approved account automatically, which would be worse. */
+App.adminDeleteAccountEntirely = function (uid, email) {
+    return App._db.collection('deletedAccounts').doc(uid).set({
+        email: email || null,
         deletedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    }).then(function () {
+        return App._db.collection('users').doc(uid).delete();
+    });
 };
 App.adminAddRestriction = function (uid, item) {
     var ref = App._db.collection('users').doc(uid);
@@ -436,7 +437,7 @@ App._renderUserDetailBody = function (u, logs) {
                 '<button id="admin-wipe-btn" class="bg-orange-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Wipe All Data</button>' +
             '</div>' +
             '<div>' +
-                '<p class="text-xs text-zinc-500 mb-3">Wipes everything above AND permanently bans the account - they can never sign in or access anything again. This is irreversible from here (you would need to manually unban in Firestore to undo it). A browser-only app can\'t literally delete their login credential, but this makes them functionally gone.</p>' +
+                '<p class="text-xs text-zinc-500 mb-3">Permanently removes this account from the system entirely - not a ban, an actual deletion. They can never sign in again. Their Firebase Auth login technically can\'t be removed by a browser-only app (that needs server-level access), but this makes them fully and permanently gone from everywhere the app itself controls.</p>' +
                 '<button id="admin-delete-account-btn" class="bg-red-600 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Delete Account Entirely</button>' +
             '</div>' +
         '</div>';
@@ -548,11 +549,11 @@ App._wireUserDetailActions = function (u) {
     });
 
     document.getElementById('admin-delete-account-btn').addEventListener('click', function () {
-        if (!confirm('This wipes ALL data AND permanently bans ' + (u.username || u.email) + '. They will never be able to sign in or access anything again. This is irreversible from here. Continue?')) return;
-        App.adminDeleteAccountEntirely(u.id).then(function () {
-            App.showToast('Account deleted permanently');
+        if (!confirm('This permanently deletes ' + (u.username || u.email) + ' from the system. Their account record is fully removed and they can never sign in again. This cannot be undone. Continue?')) return;
+        App.adminDeleteAccountEntirely(u.id, u.email).then(function () {
+            App.showToast('Account permanently deleted');
             App._loadAdminUsers();
-            setTimeout(reopen, 400);
+            App.closeUserDetailModal();
         }).catch(function (e) { console.error(e); App.showToast('Failed to delete account.'); });
     });
 

@@ -12,12 +12,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=9">
+    <link rel="stylesheet" href="assets/style.css?v=10">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=9"></script>
-    <script src="assets/app.js?v=9"></script>
+    <script src="assets/firebase-config.js?v=10"></script>
+    <script src="assets/app.js?v=10"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -93,6 +93,17 @@
                 <input id="show-recent-toggle" type="checkbox" class="w-5 h-5 accent-primary cursor-pointer">
             </label>
         </div>
+
+        <!-- Danger Zone -->
+        <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-red-500 mb-1">Delete Account</h2>
+            <p class="text-xs text-zinc-500 mb-4">Permanently deletes your account and all profiles, watchlists, and history. This cannot be undone.</p>
+            <form id="delete-account-form" class="flex flex-col gap-3">
+                <input id="delete-account-password" type="password" required placeholder="Enter your password to confirm" autocomplete="current-password" class="w-full h-12 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-red-500 transition-colors">
+                <p id="delete-account-error" class="hidden text-red-500 text-sm font-medium"></p>
+                <button type="submit" class="self-start bg-red-600 hover:bg-red-700 text-white font-bold px-6 h-11 rounded-xl transition-colors">Permanently Delete My Account</button>
+            </form>
+        </div>
     </section>
 
     <div id="footer-root"></div>
@@ -116,6 +127,28 @@
             }).catch(function () {
                 App.showToast('Failed to save preference.');
                 e.target.checked = !e.target.checked;
+            });
+        });
+
+        var deleteAccountForm = document.getElementById('delete-account-form');
+        deleteAccountForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var errEl = document.getElementById('delete-account-error');
+            errEl.classList.add('hidden');
+            var pw = document.getElementById('delete-account-password').value;
+            if (!confirm('This permanently deletes your account and everything in it. This cannot be undone. Are you sure?')) return;
+
+            var btn = deleteAccountForm.querySelector('button[type="submit"]');
+            btn.disabled = true; btn.innerText = 'Deleting...';
+
+            App.selfDeleteAccount(pw).then(function () {
+                location.href = 'login.html?deleted=1';
+            }).catch(function (err) {
+                var code = (err && err.code) || '';
+                errEl.innerText = code.indexOf('wrong-password') > -1 || code.indexOf('invalid-credential') > -1
+                    ? 'Incorrect password.' : (err.message || 'Failed to delete account.');
+                errEl.classList.remove('hidden');
+                btn.disabled = false; btn.innerText = 'Permanently Delete My Account';
             });
         });
 

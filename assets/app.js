@@ -277,6 +277,22 @@ App.gateSiteAccess = function () {
             location.href = 'login.html?return=' + returnTo;
             return;
         }
+        App._db.collection('deletedAccounts').doc(user.uid).get().then(function (tombstone) {
+            if (tombstone.exists) {
+                firebase.auth().signOut().finally(function () {
+                    location.href = 'login.html?deleted=1';
+                });
+                return;
+            }
+            App._continueGateAfterDeletionCheck(overlay);
+        }).catch(function () {
+            // If this check itself fails (e.g. rules not yet updated), fail open rather
+            // than lock everyone out - the normal approved/banned checks still apply.
+            App._continueGateAfterDeletionCheck(overlay);
+        });
+    });
+};
+App._continueGateAfterDeletionCheck = function (overlay) {
         if (!App.userData.approved) {
             firebase.auth().signOut().finally(function () {
                 location.href = 'pending-approval.html';
@@ -302,7 +318,6 @@ App.gateSiteAccess = function () {
             });
             location.href = 'profiles.html';
         }
-    });
 };
 function fsDateToIso(ts) {
     try { var d = ts.toDate ? ts.toDate() : new Date(ts); return d.toISOString(); } catch (e) { return ''; }
@@ -645,7 +660,48 @@ App.saveRecentlyViewed = function (item, mediaType) {
 /* ============================================================
    NAV + FOOTER (injected into #nav-root / #footer-root on every page)
    ============================================================ */
+App.selfDeleteAccount = function (currentPassword) {
+    return App.reauthenticate(currentPassword).then(function () {
+        var uid = App.Auth.currentUser.uid;
+        var email = App.Auth.currentUser.email;
+        return App._db.collection('deletedAccounts').doc(uid).set({
+            email: email, selfDeleted: true, deletedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function () { return App._db.collection('users').doc(uid).delete(); })
+          .then(function () { return firebase.auth().signOut(); });
+    });
+};
+
+App.injectPwaManifest = function () {
+    if (App._pwaInjected) return;
+    App._pwaInjected = true;
+    try {
+        var manifest = {
+            name: 'TfrejNOW', short_name: 'TfrejNOW',
+            description: 'Search and stream movies, TV shows, and anime.',
+            start_url: 'index.html', display: 'standalone',
+            background_color: '#09090b', theme_color: '#6d28d9',
+            icons: [{
+                src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%236d28d9'/%3E%3Ctext y='68' x='50' font-size='60' text-anchor='middle' fill='white'%3E%F0%9F%8D%BF%3C/text%3E%3C/svg%3E",
+                sizes: '192x192 512x512', type: 'image/svg+xml', purpose: 'any'
+            }]
+        };
+        var blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        var link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = URL.createObjectURL(blob);
+        document.head.appendChild(link);
+
+        var appleCapable = document.createElement('meta');
+        appleCapable.name = 'apple-mobile-web-app-capable'; appleCapable.content = 'yes';
+        document.head.appendChild(appleCapable);
+        var appleStatus = document.createElement('meta');
+        appleStatus.name = 'apple-mobile-web-app-status-bar-style'; appleStatus.content = 'black-translucent';
+        document.head.appendChild(appleStatus);
+    } catch (e) { console.error('PWA manifest injection failed', e); }
+};
+
 App.renderNav = function (activeHref) {
+    App.injectPwaManifest();
     var root = document.getElementById('nav-root');
     if (!root) return;
     root.innerHTML =
@@ -720,17 +776,81 @@ App.renderAuthNav = function () {
     if (user) {
         var displayName = (App.userData && App.userData.username) ? App.userData.username : user.email;
         var activeProfile = App.getActiveProfile ? App.getActiveProfile() : null;
-        var profileChip = activeProfile
-            ? '<button onclick="App.switchProfile()" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-3 py-1 rounded-full transition-colors" title="Switch Profile">' +
-                '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
-              '</button>'
-            : '';
+        var otherProfiles = activeProfile ? (App._rawProfiles || []).filter(function (p) { return p.id !== activeProfile.id; }) : [];
+        var hasMultiple = otherProfiles.length > 0;
+
+        var profileChip = '';
+        if (activeProfile) {
+            if (hasMultiple) {
+                var dropdownItems = otherProfiles.map(function (p) {
+                    return '<button class="profile-switch-item w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-left" data-id="' + p.id + '">' +
+                        '<span class="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-sm flex-shrink-0">' + p.avatar + '</span>' +
+                        '<span class="text-sm font-bold text-black dark:text-white truncate">' + p.name + '</span>' +
+                        (p.pin ? '<span class="ml-auto text-xs flex-shrink-0">🔒</span>' : '') +
+                    '</button>';
+                }).join('');
+                profileChip =
+                    '<div class="relative">' +
+                        '<button id="profile-dropdown-btn" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-2.5 py-1 rounded-full transition-colors">' +
+                            '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
+                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>' +
+                        '</button>' +
+                        '<div id="profile-dropdown-panel" class="hidden absolute right-0 top-full mt-2 w-56 bg-white dark:bg-black/95 border border-black/10 dark:border-white/10 rounded-xl shadow-2xl p-2 z-50">' +
+                            dropdownItems +
+                            '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' +
+                            '<a href="profiles.html" class="block w-full px-3 py-2.5 text-sm font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">Manage Profiles</a>' +
+                        '</div>' +
+                    '</div>';
+            } else {
+                profileChip = '<a href="profiles.html" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-3 py-1 rounded-full transition-colors" title="Manage Profiles">' +
+                    '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
+                '</a>';
+            }
+        }
+
         if (deskSlot) deskSlot.innerHTML = profileChip + '<a href="profile.html" class="text-xs font-medium text-zinc-400 dark:text-zinc-500 max-w-[110px] truncate hover:text-primary transition-colors" title="Account settings">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
-        if (mobSlot) mobSlot.innerHTML = (activeProfile ? '<button onclick="App.switchProfile()" class="w-full text-left px-6 py-3.5 flex items-center gap-2 text-xs font-bold text-white bg-primary/90 hover:bg-primary transition-colors"><span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name + ' · Switch Profile</button>' : '') + '<a href="profile.html" class="block px-6 py-3.5 text-xs font-medium text-zinc-500 truncate hover:text-primary transition-colors">Account: ' + displayName + '</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
+        if (mobSlot) {
+            var mobProfileLinks = activeProfile
+                ? '<div class="px-6 py-3 flex items-center gap-2 text-xs font-bold text-white bg-primary/90"><span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name + ' (Current Profile)</div>' +
+                  otherProfiles.map(function (p) {
+                      return '<button class="profile-switch-item w-full text-left px-6 py-3 flex items-center gap-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10" data-id="' + p.id + '"><span class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm">' + p.avatar + '</span>' + p.name + (p.pin ? ' 🔒' : '') + '</button>';
+                  }).join('') +
+                  '<a href="profiles.html" class="block px-6 py-3 text-xs font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10">Manage Profiles</a>'
+                : '';
+            mobSlot.innerHTML = mobProfileLinks + '<a href="profile.html" class="block px-6 py-3.5 text-xs font-medium text-zinc-500 truncate hover:text-primary transition-colors border-t border-black/5 dark:border-white/5">Account: ' + displayName + '</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
+        }
+
+        App._wireProfileDropdown();
     } else {
         if (deskSlot) deskSlot.innerHTML = '<a href="login.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign In</a><a href="signup.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-primary text-white hover:bg-primary/80">Sign Up</a>';
         if (mobSlot) mobSlot.innerHTML = '<a href="login.html" class="block px-6 py-3.5 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">Sign In</a><a href="signup.html" class="block px-6 py-3.5 text-sm font-bold text-primary hover:bg-primary hover:text-white">Sign Up</a>';
     }
+};
+
+App._wireProfileDropdown = function () {
+    var btn = document.getElementById('profile-dropdown-btn');
+    var panel = document.getElementById('profile-dropdown-panel');
+    if (btn && panel) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            panel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', function (e) {
+            if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) {
+                panel.classList.add('hidden');
+            }
+        });
+    }
+    document.querySelectorAll('.profile-switch-item').forEach(function (item) {
+        item.addEventListener('click', function () {
+            var id = item.getAttribute('data-id');
+            var profile = (App._rawProfiles || []).filter(function (p) { return p.id === id; })[0];
+            if (!profile) return;
+            if (profile.pin) { location.href = 'profiles.html'; return; }
+            App.selectProfile(id);
+            location.reload();
+        });
+    });
 };
 
 App.toggleMobileMenu = function () {

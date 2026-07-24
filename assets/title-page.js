@@ -35,6 +35,16 @@ App.initTitlePage = function () {
 App.renderTitleDetails = function (data, mediaType) {
     var id = data.id;
 
+    if (App.isKidsProfile && App.isKidsProfile()) {
+        var itemGenreIds = (data.genres || []).map(function (g) { return g.id; });
+        var isSafe = App.filterKidsSafe([{ genre_ids: itemGenreIds }]).length > 0;
+        if (!isSafe) {
+            App.showToast('This title isn\'t available on a Kids profile.');
+            setTimeout(function () { location.href = 'index.html'; }, 800);
+            return;
+        }
+    }
+
     if (mediaType === 'tv' && App.userData.progress[id]) {
         App.currentSeason = App.userData.progress[id].season;
         App.currentEpisode = App.userData.progress[id].episode;
@@ -92,7 +102,8 @@ App.renderTitleDetails = function (data, mediaType) {
     var similarItems = (data.similar && data.similar.results) ? data.similar.results.slice() : [];
     if (isAnime) similarItems = similarItems.filter(function (it) { return it.original_language === 'ja'; });
     var renderSimilar = function (items) {
-        if (items && items.length > 0) { similarSection.classList.remove('hidden'); App.renderCards(items.slice(0, 10), 'similar-results', mediaType, true); }
+        items = App.filterKidsSafe(items || []);
+        if (items.length > 0) { similarSection.classList.remove('hidden'); App.renderCards(items.slice(0, 10), 'similar-results', mediaType, true); }
         else similarSection.classList.add('hidden');
     };
     if (similarItems.length > 0) renderSimilar(similarItems);
@@ -103,9 +114,10 @@ App.renderTitleDetails = function (data, mediaType) {
     } else similarSection.classList.add('hidden');
 
     var recSection = document.getElementById('recommended-section');
-    if (data.recommendations && data.recommendations.results && data.recommendations.results.length > 0) {
+    var recItems = App.filterKidsSafe((data.recommendations && data.recommendations.results) || []);
+    if (recItems.length > 0) {
         recSection.classList.remove('hidden');
-        App.renderCards(data.recommendations.results.slice(0, 10), 'recommended-results', mediaType, true);
+        App.renderCards(recItems.slice(0, 10), 'recommended-results', mediaType, true);
     } else recSection.classList.add('hidden');
 };
 
@@ -123,11 +135,11 @@ App.renderWatchlistButton = function () {
     if (!btn || !App.currentItemData) return;
     var inList = App.userData.watchlist.some(function (i) { return String(i.id) === String(App.currentItemData.id); });
     if (inList) {
-        btn.innerHTML = '✓ Added to List';
-        btn.className = 'flex items-center gap-2 bg-primary border border-primary text-white px-5 py-3 rounded-xl font-bold';
+        btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Added to List';
+        btn.className = 'flex items-center gap-2 bg-primary border border-primary text-white px-6 py-4 rounded-xl font-bold text-base md:text-lg';
     } else {
-        btn.innerHTML = '+ Add to List';
-        btn.className = 'flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-5 py-3 rounded-xl font-bold';
+        btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Add to List';
+        btn.className = 'flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-6 py-4 rounded-xl font-bold text-base md:text-lg';
     }
 };
 App.handleWatchlistToggle = function () {
