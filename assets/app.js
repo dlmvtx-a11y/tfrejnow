@@ -194,7 +194,10 @@ function withTimeout(promise, label) {
     });
 }
 App.signOutUser = function () {
+    var uid = App.Auth.currentUser ? App.Auth.currentUser.uid : null;
     return firebase.auth().signOut().then(function () {
+        if (uid) sessionStorage.removeItem('tfrej_profile_' + uid);
+        App.activeProfileId = null;
         App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [] };
         location.href = 'login.html';
     });
@@ -484,7 +487,7 @@ App.loadUserData = function () {
             App._rawProfiles = profiles;
             App._rawProfileData = profileData;
 
-            var savedProfileId = localStorage.getItem('tfrej_profile_' + App.Auth.currentUser.uid);
+            var savedProfileId = sessionStorage.getItem('tfrej_profile_' + App.Auth.currentUser.uid);
             App.activeProfileId = (savedProfileId && profiles.some(function (p) { return p.id === savedProfileId; })) ? savedProfileId : null;
             App._applyActiveProfileData();
 
@@ -529,13 +532,21 @@ App.saveUserData = function () {
 };
 
 /* ---------- PROFILES ---------- */
-/* ---------- KIDS MODE CONTENT FILTERING ---------- */
+/* ---------- KIDS MODE CONTENT FILTERING ----------
+   Best-effort only: TMDB doesn't expose reliable per-item maturity ratings on
+   list/search endpoints, so this leans on genre tags. Requires a kid-safe
+   genre AND excludes anything also tagged with a mature-adjacent genre,
+   since plenty of mature content (adult animation, violent anime, etc.)
+   still carries the Animation tag on its own. */
 App.KIDS_SAFE_GENRES = [10751, 16]; // Family, Animation
+App.KIDS_EXCLUDE_GENRES = [27, 53, 80, 10752, 9648, 18]; // Horror, Thriller, Crime, War, Mystery, Drama
 App.filterKidsSafe = function (results) {
     if (!App.isKidsProfile()) return results;
     return results.filter(function (item) {
         var ids = item.genre_ids || (item.genres ? item.genres.map(function (g) { return g.id; }) : []);
-        return ids.some(function (g) { return App.KIDS_SAFE_GENRES.indexOf(g) > -1; });
+        var hasSafe = ids.some(function (g) { return App.KIDS_SAFE_GENRES.indexOf(g) > -1; });
+        var hasExcluded = ids.some(function (g) { return App.KIDS_EXCLUDE_GENRES.indexOf(g) > -1; });
+        return hasSafe && !hasExcluded;
     });
 };
 
@@ -570,12 +581,12 @@ App.deleteProfile = function (id) {
 };
 App.selectProfile = function (id) {
     App.activeProfileId = id;
-    localStorage.setItem('tfrej_profile_' + App.Auth.currentUser.uid, id);
+    sessionStorage.setItem('tfrej_profile_' + App.Auth.currentUser.uid, id);
     App._applyActiveProfileData();
 };
 App.switchProfile = function () {
     App.activeProfileId = null;
-    localStorage.removeItem('tfrej_profile_' + App.Auth.currentUser.uid);
+    sessionStorage.removeItem('tfrej_profile_' + App.Auth.currentUser.uid);
     location.href = 'profiles.html';
 };
 
@@ -706,12 +717,12 @@ App.renderAuthNav = function () {
         var displayName = (App.userData && App.userData.username) ? App.userData.username : user.email;
         var activeProfile = App.getActiveProfile ? App.getActiveProfile() : null;
         var profileChip = activeProfile
-            ? '<button onclick="App.switchProfile()" class="flex items-center gap-1.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary transition-colors" title="Switch Profile">' +
-                '<span class="w-6 h-6 rounded-md bg-primary/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
+            ? '<button onclick="App.switchProfile()" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-3 py-1 rounded-full transition-colors" title="Switch Profile">' +
+                '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
               '</button>'
             : '';
-        if (deskSlot) deskSlot.innerHTML = profileChip + '<a href="profile.html" class="text-xs font-bold text-zinc-500 dark:text-zinc-400 max-w-[140px] truncate hover:text-primary transition-colors">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
-        if (mobSlot) mobSlot.innerHTML = (activeProfile ? '<button onclick="App.switchProfile()" class="w-full text-left px-6 py-3.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary transition-colors">' + activeProfile.avatar + ' ' + activeProfile.name + ' (Switch Profile)</button>' : '') + '<a href="profile.html" class="block px-6 py-3.5 text-xs font-bold text-zinc-500 dark:text-zinc-400 truncate hover:text-primary transition-colors">' + displayName + ' (Edit Account)</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
+        if (deskSlot) deskSlot.innerHTML = profileChip + '<a href="profile.html" class="text-xs font-medium text-zinc-400 dark:text-zinc-500 max-w-[110px] truncate hover:text-primary transition-colors" title="Account settings">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
+        if (mobSlot) mobSlot.innerHTML = (activeProfile ? '<button onclick="App.switchProfile()" class="w-full text-left px-6 py-3.5 flex items-center gap-2 text-xs font-bold text-white bg-primary/90 hover:bg-primary transition-colors"><span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name + ' · Switch Profile</button>' : '') + '<a href="profile.html" class="block px-6 py-3.5 text-xs font-medium text-zinc-500 truncate hover:text-primary transition-colors">Account: ' + displayName + '</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
     } else {
         if (deskSlot) deskSlot.innerHTML = '<a href="login.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign In</a><a href="signup.html" class="text-xs font-bold px-3 py-1.5 rounded-full bg-primary text-white hover:bg-primary/80">Sign Up</a>';
         if (mobSlot) mobSlot.innerHTML = '<a href="login.html" class="block px-6 py-3.5 text-sm font-bold text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">Sign In</a><a href="signup.html" class="block px-6 py-3.5 text-sm font-bold text-primary hover:bg-primary hover:text-white">Sign Up</a>';

@@ -197,8 +197,10 @@ App._renderUsersTable = function (filter) {
         var wlCount = (u.watchlist || []).length;
         var progCount = Object.keys(u.progress || {}).length;
         var banned = App.isCurrentlyBanned(u);
+        var pending = u.approved === false;
         var statusHtml;
-        if (banned && !u.blockedUntil) statusHtml = '<span class="text-red-500 font-bold text-xs">Banned (forever)</span>';
+        if (pending) statusHtml = '<span class="text-yellow-500 font-bold text-xs">Pending Approval</span>';
+        else if (banned && !u.blockedUntil) statusHtml = '<span class="text-red-500 font-bold text-xs">Banned (forever)</span>';
         else if (banned) statusHtml = '<span class="text-orange-500 font-bold text-xs">Banned until ' + fmtDateTime(u.blockedUntil) + '</span>';
         else statusHtml = '<span class="text-green-500 font-bold text-xs">Active</span>';
 

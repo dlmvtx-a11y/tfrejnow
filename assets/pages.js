@@ -67,7 +67,7 @@ App.fetchTvRow = function () {
 App.fetchAnimeRow = function () {
     document.getElementById('anime-results').innerHTML = App.skeletons(10);
     App.fetchJSON(App.BASE_URL + '/discover/tv?api_key=' + App.API_KEY + '&with_genres=16&with_original_language=ja&sort_by=popularity.desc')
-        .then(function (d) { App.renderCards((d.results || []).slice(0, 10), 'anime-results', 'tv'); })
+        .then(function (d) { App.renderCards(App.filterKidsSafe(d.results || []).slice(0, 10), 'anime-results', 'tv'); })
         .catch(function () { document.getElementById('anime-results').innerHTML = App.retryHtml('anime-results', 'App.fetchAnimeRow'); });
 };
 
