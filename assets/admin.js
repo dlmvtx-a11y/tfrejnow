@@ -246,13 +246,27 @@ App.adminUpdateUsernameFor = function (uid, username) {
 App.adminSendPasswordReset = function (email) {
     return firebase.auth().sendPasswordResetEmail(email);
 };
-/* "Delete" without a backend can't remove the Firebase Auth login itself -
-   that requires the Admin SDK, which can only run on a server. This wipes
-   their app data only. It does NOT ban them - use the Ban section separately
-   if you also want to stop them signing back in. */
-App.adminDeleteUser = function (uid) {
+/* Clears every piece of watch data across all of their profiles - watchlist,
+   progress, recently-viewed, restricted titles, and the profiles themselves.
+   The account stays active - they can sign in and start completely fresh. */
+App.adminWipeUserData = function (uid) {
     return App._db.collection('users').doc(uid).set({
         watchlist: [], progress: {}, recent: [], restrictedTitles: [],
+        profiles: [], profileData: {},
+        wipedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+};
+/* "Delete" without a backend can't remove the Firebase Auth login itself -
+   that requires the Admin SDK, which can only run on a server. This is the
+   closest equivalent achievable client-side: wipes everything Wipe Data does,
+   PLUS permanently bans them so they can never sign in or access anything
+   again - functionally gone, even though an empty login shell technically
+   still exists in Firebase Auth until manually removed from the console. */
+App.adminDeleteAccountEntirely = function (uid) {
+    return App._db.collection('users').doc(uid).set({
+        watchlist: [], progress: {}, recent: [], restrictedTitles: [],
+        profiles: [], profileData: {},
+        blocked: true, blockedUntil: null, banReason: 'Account deleted by admin',
         deletedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 };
@@ -415,10 +429,16 @@ App._renderUserDetailBody = function (u, logs) {
             '</div>' +
         '</div>' +
 
-        '<div class="border-t border-red-500/20 pt-5">' +
-            '<h4 class="font-bold text-red-500 mb-2 text-sm">Danger Zone</h4>' +
-            '<p class="text-xs text-zinc-500 mb-3">Wipes their watchlist, continue-watching, and recent-viewed data only. Does NOT ban them - they can still sign in and start fresh. Use the Ban section above if you also want to stop them signing in.</p>' +
-            '<button id="admin-delete-btn" class="bg-red-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Delete User Data</button>' +
+        '<div class="border-t border-red-500/20 pt-5 flex flex-col gap-5">' +
+            '<h4 class="font-bold text-red-500 text-sm">Danger Zone</h4>' +
+            '<div>' +
+                '<p class="text-xs text-zinc-500 mb-3">Wipes their watchlist, continue-watching, recently-viewed, and all profiles across the account. Does NOT ban them - their account stays active and they can sign back in with a completely clean slate.</p>' +
+                '<button id="admin-wipe-btn" class="bg-orange-500 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Wipe All Data</button>' +
+            '</div>' +
+            '<div>' +
+                '<p class="text-xs text-zinc-500 mb-3">Wipes everything above AND permanently bans the account - they can never sign in or access anything again. This is irreversible from here (you would need to manually unban in Firestore to undo it). A browser-only app can\'t literally delete their login credential, but this makes them functionally gone.</p>' +
+                '<button id="admin-delete-account-btn" class="bg-red-600 text-white text-xs font-bold px-4 py-2.5 rounded-lg">Delete Account Entirely</button>' +
+            '</div>' +
         '</div>';
 
     App._wireUserDetailActions(u);
@@ -518,13 +538,22 @@ App._wireUserDetailActions = function (u) {
         }).catch(function (e) { console.error(e); App.showToast('Failed to unban user.'); });
     });
 
-    document.getElementById('admin-delete-btn').addEventListener('click', function () {
-        if (!confirm('This wipes the watchlist, continue-watching, and history data for ' + (u.username || u.email) + '. They will NOT be banned - they can still sign in. Continue?')) return;
-        App.adminDeleteUser(u.id).then(function () {
-            App.showToast('User data deleted');
+    document.getElementById('admin-wipe-btn').addEventListener('click', function () {
+        if (!confirm('This wipes the watchlist, continue-watching, history, and all profiles for ' + (u.username || u.email) + '. Their account stays active and they can sign back in with a clean slate. Continue?')) return;
+        App.adminWipeUserData(u.id).then(function () {
+            App.showToast('All data wiped');
             App._loadAdminUsers();
             setTimeout(reopen, 400);
-        }).catch(function (e) { console.error(e); App.showToast('Failed to delete user data.'); });
+        }).catch(function (e) { console.error(e); App.showToast('Failed to wipe user data.'); });
+    });
+
+    document.getElementById('admin-delete-account-btn').addEventListener('click', function () {
+        if (!confirm('This wipes ALL data AND permanently bans ' + (u.username || u.email) + '. They will never be able to sign in or access anything again. This is irreversible from here. Continue?')) return;
+        App.adminDeleteAccountEntirely(u.id).then(function () {
+            App.showToast('Account deleted permanently');
+            App._loadAdminUsers();
+            setTimeout(reopen, 400);
+        }).catch(function (e) { console.error(e); App.showToast('Failed to delete account.'); });
     });
 
     var runRestrictSearch = function () {

@@ -296,6 +296,10 @@ App.gateSiteAccess = function () {
 
         // Profile picker gate - runs only once sign-in/approval/ban checks all pass.
         if (!App.activeProfileId && location.pathname.indexOf('profiles.html') === -1) {
+            console.warn('No active profile found - redirecting to profiles.html. Debug info:', {
+                sessionStorageValue: App.Auth.currentUser ? sessionStorage.getItem('tfrej_profile_' + App.Auth.currentUser.uid) : null,
+                knownProfileIds: (App._rawProfiles || []).map(function (p) { return p.id; })
+            });
             location.href = 'profiles.html';
         }
     });
