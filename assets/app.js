@@ -553,11 +553,13 @@ App.saveUserData = function () {
 /* ---------- PROFILES ---------- */
 /* ---------- KIDS MODE CONTENT FILTERING ----------
    Best-effort only: TMDB doesn't expose reliable per-item maturity ratings on
-   list/search endpoints, so this leans on genre tags. Requires a kid-safe
-   genre AND excludes anything also tagged with a mature-adjacent genre,
-   since plenty of mature content (adult animation, violent anime, etc.)
-   still carries the Animation tag on its own. */
-App.KIDS_SAFE_GENRES = [10751, 16]; // Family, Animation
+   list/search endpoints, so this leans on genre tags. Requires the Family tag
+   specifically - Animation alone isn't a safe enough signal on its own, since
+   plenty of mature content (adult animation, violent anime, etc.) carries
+   that tag too. This is intentionally conservative: some legitimate kids'
+   content without an explicit Family tag may get excluded too, which is the
+   safer failure mode for a kids profile. */
+App.KIDS_SAFE_GENRES = [10751]; // Family
 App.KIDS_EXCLUDE_GENRES = [27, 53, 80, 10752, 9648, 18]; // Horror, Thriller, Crime, War, Mystery, Drama
 App.filterKidsSafe = function (results) {
     if (!App.isKidsProfile()) return results;
@@ -700,12 +702,37 @@ App.injectPwaManifest = function () {
     } catch (e) { console.error('PWA manifest injection failed', e); }
 };
 
+App.renderAnnouncementBanner = function () {
+    var slot = document.getElementById('announcement-banner-slot');
+    if (!slot || !App._db) return;
+    App._db.collection('siteConfig').doc('announcement').get().then(function (doc) {
+        if (!doc.exists) return;
+        var data = doc.data();
+        if (!data.active || !data.text) return;
+        if (sessionStorage.getItem('tfrej_announcement_dismissed') === data.text) return;
+
+        var escaped = String(data.text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        slot.innerHTML =
+            '<div class="w-full bg-primary text-white text-xs md:text-sm font-bold px-4 py-2.5 flex items-center justify-center gap-4 relative md:rounded-t-2xl">' +
+                '<span class="text-center">' + escaped + '</span>' +
+                '<button id="announcement-dismiss-btn" class="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-70 flex-shrink-0" aria-label="Dismiss announcement">' +
+                    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+                '</button>' +
+            '</div>';
+        document.getElementById('announcement-dismiss-btn').addEventListener('click', function () {
+            sessionStorage.setItem('tfrej_announcement_dismissed', data.text);
+            slot.innerHTML = '';
+        });
+    }).catch(function (e) { console.error('announcement load failed', e); });
+};
+
 App.renderNav = function (activeHref) {
     App.injectPwaManifest();
     var root = document.getElementById('nav-root');
     if (!root) return;
     root.innerHTML =
         '<nav class="safe-top fixed top-0 md:top-4 left-0 right-0 z-[100] flex flex-col items-center w-full">' +
+            '<div id="announcement-banner-slot" class="w-full flex justify-center"></div>' +
             '<div id="navbar-inner" class="bg-white/80 dark:bg-black/60 backdrop-blur-md md:rounded-2xl border-b md:border border-black/5 dark:border-white/5 shadow-lg px-5 md:px-10 h-[64px] md:h-[76px] flex items-center justify-between gap-4 w-full max-w-[1800px] transition-shadow duration-300">' +
                 '<a href="index.html" class="flex items-center gap-2 flex-shrink-0 focusable rounded"><span class="text-2xl md:text-3xl font-black tracking-tighter text-black dark:text-white leading-none">Tfrej<span class="text-primary">NOW</span></span></a>' +
                 '<div class="hidden lg:flex items-center gap-6 text-sm font-bold text-zinc-600 dark:text-zinc-300">' +
@@ -757,6 +784,7 @@ App.renderNav = function (activeHref) {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') App.closeMobileMenu(); });
 
     App.renderAuthNav();
+    App.renderAnnouncementBanner();
 
     function navLink(href, label, active) {
         var isActive = active === href;

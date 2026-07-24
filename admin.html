@@ -12,14 +12,14 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=10">
+    <link rel="stylesheet" href="assets/style.css?v=11">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=10"></script>
-    <script src="assets/app.js?v=10"></script>
-    <script src="assets/admin.js?v=10"></script>
+    <script src="assets/firebase-config.js?v=11"></script>
+    <script src="assets/app.js?v=11"></script>
+    <script src="assets/admin.js?v=11"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -36,6 +36,22 @@
         </div>
 
         <div id="overview-cards" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10"></div>
+
+        <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5 mb-10">
+            <h2 class="text-lg font-bold text-black dark:text-white mb-1">Site Announcement</h2>
+            <p class="text-xs text-zinc-500 mb-4">Shows as a dismissible bar at the top of the site for every user. Leave the checkbox off (or clear the text) to hide it.</p>
+            <textarea id="announcement-text-input" rows="2" placeholder="e.g. Server 2 is down, use Server 1 for now" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-black dark:text-white outline-none focus:border-primary resize-none mb-3"></textarea>
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input id="announcement-active-toggle" type="checkbox" class="w-5 h-5 accent-primary cursor-pointer">
+                    <span class="text-sm font-bold text-black dark:text-white">Show on site</span>
+                </label>
+                <div class="flex gap-2">
+                    <button id="announcement-clear-btn" class="bg-black/5 dark:bg-white/10 text-black dark:text-white text-sm font-bold px-4 py-2.5 rounded-xl">Clear</button>
+                    <button id="announcement-save-btn" class="bg-primary text-white text-sm font-bold px-5 py-2.5 rounded-xl">Save</button>
+                </div>
+            </div>
+        </div>
 
         <div class="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-5 mb-10">
             <h2 class="text-lg font-bold text-black dark:text-white mb-4">Signups - Last 14 Days</h2>

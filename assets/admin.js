@@ -35,7 +35,53 @@ App.initAdminDashboard = function () {
     App.renderFooter();
     App.gateAdminAccess(function () {
         App._loadAdminOverview();
+        App._wireAnnouncementForm();
     });
+};
+
+App._wireAnnouncementForm = function () {
+    var textInput = document.getElementById('announcement-text-input');
+    var activeToggle = document.getElementById('announcement-active-toggle');
+    var saveBtn = document.getElementById('announcement-save-btn');
+    var clearBtn = document.getElementById('announcement-clear-btn');
+    if (!textInput || !saveBtn) return;
+
+    App.loadAnnouncementForAdmin().then(function (data) {
+        textInput.value = data.text || '';
+        activeToggle.checked = !!data.active;
+    });
+
+    saveBtn.addEventListener('click', function () {
+        var text = textInput.value.trim();
+        var active = activeToggle.checked;
+        if (active && !text) { App.showToast('Enter a message first, or leave "Show on site" unchecked.'); return; }
+        saveBtn.disabled = true; saveBtn.innerText = 'Saving...';
+        App.saveAnnouncement(text, active).then(function () {
+            App.showToast(active ? 'Announcement is now live' : 'Announcement saved (hidden)');
+        }).catch(function (e) {
+            console.error(e); App.showToast('Failed to save announcement.');
+        }).finally(function () {
+            saveBtn.disabled = false; saveBtn.innerText = 'Save';
+        });
+    });
+
+    clearBtn.addEventListener('click', function () {
+        textInput.value = '';
+        activeToggle.checked = false;
+        App.saveAnnouncement('', false).then(function () {
+            App.showToast('Announcement cleared');
+        }).catch(function (e) { console.error(e); App.showToast('Failed to clear announcement.'); });
+    });
+};
+
+App.saveAnnouncement = function (text, active) {
+    return App._db.collection('siteConfig').doc('announcement').set({
+        text: text, active: active, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+};
+App.loadAnnouncementForAdmin = function () {
+    return App._db.collection('siteConfig').doc('announcement').get()
+        .then(function (doc) { return doc.exists ? doc.data() : { text: '', active: false }; });
 };
 
 App._loadAdminOverview = function () {
@@ -549,9 +595,9 @@ App._wireUserDetailActions = function (u) {
     });
 
     document.getElementById('admin-delete-account-btn').addEventListener('click', function () {
-        if (!confirm('This permanently deletes ' + (u.username || u.email) + ' from the system. Their account record is fully removed and they can never sign in again. This cannot be undone. Continue?')) return;
+        if (!confirm('This permanently deletes ' + (u.username || u.email) + ' from the system. Their account record is fully removed and they can never sign in again.\n\nNote: their email will still show as "in use" if someone tries to sign up again with it - fully freeing it requires manually deleting them from Firebase Console \u2192 Authentication too.\n\nContinue?')) return;
         App.adminDeleteAccountEntirely(u.id, u.email).then(function () {
-            App.showToast('Account permanently deleted');
+            App.showToast('Deleted. Note: that email still can\'t re-sign-up unless also removed in Firebase Console → Authentication.');
             App._loadAdminUsers();
             App.closeUserDetailModal();
         }).catch(function (e) { console.error(e); App.showToast('Failed to delete account.'); });

@@ -9,41 +9,41 @@ App.initHomePage = function () {
     App.renderGenreBar('genre-row');
     App.wireRowDrag('genre-row');
 
+    App._heroItems = []; App._heroIndex = 0; App._heroTimer = null;
+    document.getElementById('trending-results').innerHTML = App.skeletons(10);
+
     App.onAuthReady(function () {
         App.renderListRows();
         App.wireHomeSearch();
+
+        App.fetchJSON(App.BASE_URL + '/trending/all/day?api_key=' + App.API_KEY)
+            .then(function (data) {
+                var results = App.filterKidsSafe(data.results || []);
+                App.renderCards(results.slice(0, 10), 'trending-results');
+                App._heroItems = results.slice(0, 5);
+                if (App._heroItems.length) { App.renderHeroDots(); App.showHero(0); App.startHeroRotation(); }
+            })
+            .catch(function () { document.getElementById('trending-results').innerHTML = App.retryHtml('trending-results', 'App.initHomePage'); });
+
+        if ('IntersectionObserver' in window) {
+            var targets = [
+                { id: 'movies-section', fn: App.fetchMoviesRow },
+                { id: 'tv-section', fn: App.fetchTvRow },
+                { id: 'anime-section', fn: App.fetchAnimeRow }
+            ];
+            var loaded = {};
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    var match = targets.filter(function (t) { return t.id === entry.target.id; })[0];
+                    if (match && !loaded[match.id]) { loaded[match.id] = true; match.fn(); observer.unobserve(entry.target); }
+                });
+            }, { rootMargin: '400px' });
+            targets.forEach(function (t) { var el = document.getElementById(t.id); if (el) observer.observe(el); });
+        } else {
+            App.fetchMoviesRow(); App.fetchTvRow(); App.fetchAnimeRow();
+        }
     });
-
-    App._heroItems = []; App._heroIndex = 0; App._heroTimer = null;
-
-    document.getElementById('trending-results').innerHTML = App.skeletons(10);
-    App.fetchJSON(App.BASE_URL + '/trending/all/day?api_key=' + App.API_KEY)
-        .then(function (data) {
-            var results = App.filterKidsSafe(data.results || []);
-            App.renderCards(results.slice(0, 10), 'trending-results');
-            App._heroItems = results.slice(0, 5);
-            if (App._heroItems.length) { App.renderHeroDots(); App.showHero(0); App.startHeroRotation(); }
-        })
-        .catch(function () { document.getElementById('trending-results').innerHTML = App.retryHtml('trending-results', 'App.initHomePage'); });
-
-    if ('IntersectionObserver' in window) {
-        var targets = [
-            { id: 'movies-section', fn: App.fetchMoviesRow },
-            { id: 'tv-section', fn: App.fetchTvRow },
-            { id: 'anime-section', fn: App.fetchAnimeRow }
-        ];
-        var loaded = {};
-        var observer = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-                if (!entry.isIntersecting) return;
-                var match = targets.filter(function (t) { return t.id === entry.target.id; })[0];
-                if (match && !loaded[match.id]) { loaded[match.id] = true; match.fn(); observer.unobserve(entry.target); }
-            });
-        }, { rootMargin: '400px' });
-        targets.forEach(function (t) { var el = document.getElementById(t.id); if (el) observer.observe(el); });
-    } else {
-        App.fetchMoviesRow(); App.fetchTvRow(); App.fetchAnimeRow();
-    }
 
     var hero = document.getElementById('hero-section');
     if (hero) {
@@ -250,7 +250,7 @@ App._runBrowse = function (pageFetcher, noAutoLoad) {
     document.getElementById('browse-results').innerHTML = '';
     document.getElementById('browse-loading').classList.remove('hidden');
     document.getElementById('load-more-btn').classList.add('hidden');
-    App._loadBrowsePage(true);
+    App.onAuthReady(function () { App._loadBrowsePage(true); });
 };
 App._loadBrowsePage = function (isNew) {
     if (!App._browseFetcher) return Promise.resolve();
