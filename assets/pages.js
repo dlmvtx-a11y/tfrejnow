@@ -182,18 +182,63 @@ App.startHeroRotation = function () {
 };
 App.stopHeroRotation = function () { if (App._heroTimer) clearInterval(App._heroTimer); App._heroTimer = null; };
 
-App.wireHomeSearch = function () {
+App.wireHomeSearch = function (typeFilter) {
     var input = document.getElementById('search-input');
     if (!input) return;
     var t;
+    var buildUrl = function (q) {
+        return 'search.html?q=' + encodeURIComponent(q) + (typeFilter ? '&type=' + typeFilter : '');
+    };
     input.addEventListener('input', function (e) {
         var q = e.target.value.trim();
         clearTimeout(t);
         if (!q) return;
-        t = setTimeout(function () { location.href = 'search.html?q=' + encodeURIComponent(q); }, 500);
+        t = setTimeout(function () { location.href = buildUrl(q); }, 500);
     });
     input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && input.value.trim()) location.href = 'search.html?q=' + encodeURIComponent(input.value.trim());
+        if (e.key === 'Enter' && input.value.trim()) location.href = buildUrl(input.value.trim());
+    });
+};
+
+/* Type-scoped search for the Movies/TV/Anime pages - typing here filters
+   results to exactly that type instead of showing everything, and clearing
+   the box restores the page's original content (e.g. "Popular Movies"). */
+App.wireScopedSearch = function (typeFilter) {
+    var input = document.getElementById('search-input');
+    if (!input) return;
+    var originalFetcher = App._browseFetcher;
+    var originalTitle = document.getElementById('browse-title').innerText;
+    var t;
+
+    var matchesType = function (item) {
+        if (typeFilter === 'anime') {
+            return item.media_type === 'tv' && (item.genre_ids || []).indexOf(16) > -1 && item.original_language === 'ja';
+        }
+        return item.media_type === typeFilter;
+    };
+
+    var runSearch = function (q) {
+        if (!q) {
+            App._browseFetcher = originalFetcher;
+            document.getElementById('browse-title').innerText = originalTitle;
+            App._browsePage = 1;
+            App._loadBrowsePage(true);
+            return;
+        }
+        document.getElementById('browse-title').innerText = 'Search Results for "' + q + '"';
+        App._runBrowse(function (page) {
+            return App.fetchJSON(App.BASE_URL + '/search/multi?api_key=' + App.API_KEY + '&query=' + encodeURIComponent(q) + '&page=' + page + '&include_adult=false')
+                .then(function (d) { return (d.results || []).filter(matchesType); });
+        });
+    };
+
+    input.addEventListener('input', function (e) {
+        var q = e.target.value.trim();
+        clearTimeout(t);
+        t = setTimeout(function () { runSearch(q); }, 500);
+    });
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') runSearch(input.value.trim());
     });
 };
 
@@ -233,11 +278,27 @@ App.initGenrePage = function () {
     });
 };
 
+App._filterSearchResultsByType = function (results, type) {
+    if (!type) return results;
+    var isAnime = function (it) { return it.media_type === 'tv' && (it.genre_ids || []).indexOf(16) > -1 && it.original_language === 'ja'; };
+    if (type === 'movie') return results.filter(function (it) { return it.media_type === 'movie'; });
+    if (type === 'anime') return results.filter(isAnime);
+    if (type === 'tv') return results.filter(function (it) { return it.media_type === 'tv' && !isAnime(it); });
+    return results;
+};
+App._searchTypeLabel = function (type) {
+    return type === 'movie' ? 'Movie' : type === 'tv' ? 'Series' : type === 'anime' ? 'Anime' : '';
+};
+
 App.initSearchPage = function () {
     App.renderNav(null);
     App.renderFooter();
     var params = new URLSearchParams(location.search);
     var q = params.get('q') || '';
+    var type = params.get('type') || '';
+    var typeSuffix = type ? '&type=' + type : '';
+    var titlePrefix = App._searchTypeLabel(type) ? App._searchTypeLabel(type) + ' Search' : 'Search Results';
+
     var input = document.getElementById('search-input');
     if (input) {
         input.value = q;
@@ -247,25 +308,25 @@ App.initSearchPage = function () {
             clearTimeout(t);
             t = setTimeout(function () {
                 if (!newQ) return;
-                history.replaceState(null, '', 'search.html?q=' + encodeURIComponent(newQ));
-                document.getElementById('browse-title').innerText = 'Search Results for "' + newQ + '"';
+                history.replaceState(null, '', 'search.html?q=' + encodeURIComponent(newQ) + typeSuffix);
+                document.getElementById('browse-title').innerText = titlePrefix + ' for "' + newQ + '"';
                 App.logSearch(newQ);
                 App._runBrowse(function () {
                     return App.fetchJSON(App.BASE_URL + '/search/multi?api_key=' + App.API_KEY + '&query=' + encodeURIComponent(newQ) + '&language=en-US&page=1&include_adult=false')
-                        .then(function (d) { return (d.results || []).filter(function (it) { return it.media_type === 'movie' || it.media_type === 'tv'; }); });
+                        .then(function (d) { return App._filterSearchResultsByType((d.results || []).filter(function (it) { return it.media_type === 'movie' || it.media_type === 'tv'; }), type); });
                 }, true);
             }, 500);
         });
     }
     if (q) {
-        document.getElementById('browse-title').innerText = 'Search Results for "' + q + '"';
+        document.getElementById('browse-title').innerText = titlePrefix + ' for "' + q + '"';
         App.logSearch(q);
         App._runBrowse(function () {
             return App.fetchJSON(App.BASE_URL + '/search/multi?api_key=' + App.API_KEY + '&query=' + encodeURIComponent(q) + '&language=en-US&page=1&include_adult=false')
-                .then(function (d) { return (d.results || []).filter(function (it) { return it.media_type === 'movie' || it.media_type === 'tv'; }); });
+                .then(function (d) { return App._filterSearchResultsByType((d.results || []).filter(function (it) { return it.media_type === 'movie' || it.media_type === 'tv'; }), type); });
         }, true);
     } else {
-        document.getElementById('browse-title').innerText = 'Search';
+        document.getElementById('browse-title').innerText = titlePrefix;
         document.getElementById('browse-loading').classList.add('hidden');
     }
 };
