@@ -12,12 +12,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=14">
+    <link rel="stylesheet" href="assets/style.css?v=15">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=14"></script>
-    <script src="assets/app.js?v=14"></script>
+    <script src="assets/firebase-config.js?v=15"></script>
+    <script src="assets/app.js?v=15"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased flex flex-col items-center justify-center px-4 py-10">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -173,16 +173,16 @@
             }).join('');
 
             var genreChecks = App.HIDABLE_GENRES.map(function (g) {
-                var checked = hiddenGenres.indexOf(g.id) > -1 ? 'checked' : '';
+                var checked = g.ids.some(function (id) { return hiddenGenres.indexOf(id) > -1; }) ? 'checked' : '';
                 return '<label class="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2 cursor-pointer text-sm">' +
-                    '<input type="checkbox" class="genre-hide-toggle w-4 h-4 accent-primary flex-shrink-0" data-genre-id="' + g.id + '" ' + checked + '>' + g.name +
+                    '<input type="checkbox" class="genre-hide-toggle w-4 h-4 accent-primary flex-shrink-0" data-genre-ids="' + g.ids.join(',') + '" ' + checked + '>' + g.name +
                 '</label>';
             }).join('');
 
             var body = document.getElementById('profiles-body');
             body.innerHTML =
                 '<h1 class="text-2xl font-black text-center">' + (isNew ? 'Add Profile' : 'Edit Profile') + '</h1>' +
-                '<div class="w-full max-w-sm flex flex-col gap-4">' +
+                '<div class="w-full max-w-md flex flex-col gap-4">' +
                     '<input id="profile-name-input" type="text" maxlength="20" placeholder="Name" value="' + name.replace(/"/g, '&quot;') + '" class="w-full h-12 bg-white/10 border border-white/20 rounded-xl px-4 text-center outline-none focus:border-primary">' +
                     '<div class="grid grid-cols-6 gap-2.5 justify-items-center" id="avatar-grid">' + avatarGrid + '</div>' +
                     '<label class="flex items-center justify-between gap-4 bg-white/5 rounded-xl px-4 py-3 cursor-pointer">' +
@@ -226,7 +226,13 @@
                 var pinVal = document.getElementById('pin-value-input').value;
                 if (wantsPin && !/^\d{4}$/.test(pinVal)) { errEl.innerText = 'PIN must be exactly 4 digits.'; errEl.classList.remove('hidden'); return; }
                 var newIsKids = document.getElementById('kids-toggle').checked;
-                var newHiddenGenres = Array.from(document.querySelectorAll('.genre-hide-toggle:checked')).map(function (cb) { return Number(cb.getAttribute('data-genre-id')); });
+                var newHiddenGenres = [];
+                document.querySelectorAll('.genre-hide-toggle:checked').forEach(function (cb) {
+                    cb.getAttribute('data-genre-ids').split(',').forEach(function (idStr) {
+                        var id = Number(idStr);
+                        if (newHiddenGenres.indexOf(id) === -1) newHiddenGenres.push(id);
+                    });
+                });
 
                 var btn = document.getElementById('form-save-btn');
                 btn.disabled = true; btn.innerText = 'Saving...';

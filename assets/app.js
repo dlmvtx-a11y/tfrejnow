@@ -65,6 +65,13 @@ App.logLoginEvent = function () {
         });
     }).catch(function (e) { console.error('logLoginEvent failed', e); });
 };
+App._logLoginOncePerSession = function () {
+    if (!App.Auth.currentUser) return;
+    var key = 'tfrej_login_logged_' + App.Auth.currentUser.uid;
+    if (sessionStorage.getItem(key)) return; // already logged this browser session
+    sessionStorage.setItem(key, '1');
+    App.logLoginEvent();
+};
 
 App.GENRES = [
     {label:'Action', m:28, t:10759}, {label:'Adventure', m:12, t:10759},
@@ -351,6 +358,7 @@ App._continueGateAfterDeletionCheck = function (overlay) {
         }
         if (overlay) overlay.remove();
         App.maybeShowAdminLink();
+        App._logLoginOncePerSession();
 
         // Profile picker gate - runs only once sign-in/approval/ban checks all pass.
         if (!App.activeProfileId && location.pathname.indexOf('profiles.html') === -1) {
@@ -620,10 +628,17 @@ App.isKidsProfile = function () {
     var p = App.getActiveProfile();
     return !!(p && p.isKids);
 };
-App.HIDABLE_GENRES = [
-    { id: 27, name: 'Horror' }, { id: 53, name: 'Thriller' }, { id: 80, name: 'Crime' },
-    { id: 10752, name: 'War' }, { id: 9648, name: 'Mystery' }, { id: 99, name: 'Documentary' }
-];
+/* Built from the same App.GENRES list used on the homepage pills, so every
+   genre available for browsing is also available to hide. Each entry covers
+   both the movie-genre and TV-genre IDs for that label, since TMDB uses
+   different IDs for the same concept across movies vs TV in a few cases
+   (e.g. Action = 28 for movies, 10759/"Action & Adventure" for TV). */
+App.HIDABLE_GENRES = App.GENRES.map(function (g) {
+    var ids = [];
+    if (g.m) ids.push(g.m);
+    if (g.t && ids.indexOf(g.t) === -1) ids.push(g.t);
+    return { name: g.label, ids: ids };
+});
 App.filterHiddenGenres = function (results) {
     var p = App.getActiveProfile();
     var hidden = (p && p.hiddenGenres) || [];
