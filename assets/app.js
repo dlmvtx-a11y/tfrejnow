@@ -367,6 +367,8 @@ App._continueGateAfterDeletionCheck = function (overlay) {
                 knownProfileIds: (App._rawProfiles || []).map(function (p) { return p.id; })
             });
             location.href = 'profiles.html';
+        } else if (App.activeProfileId) {
+            App.checkForNewEpisodes();
         }
 };
 function fsDateToIso(ts) {
@@ -621,6 +623,146 @@ App.filterKidsSafe = function (results) {
     });
 };
 
+/* ============================================================
+   NOTIFICATIONS ("bell" system) - in-app only, checked when the app is
+   actively open (no true push is possible without a backend server -
+   see chat for why). Stored per profile, same as watch data.
+   ============================================================ */
+App.getNotifications = function () {
+    var profile = App.getActiveProfile();
+    var pd = profile && App._rawProfileData[profile.id];
+    return (pd && pd.notifications) ? pd.notifications : [];
+};
+App.addNotification = function (notif) {
+    var profile = App.getActiveProfile();
+    if (!profile || !App.Auth.currentUser) return;
+    var pd = App._rawProfileData[profile.id] = App._rawProfileData[profile.id] || { watchlist: [], progress: {}, recent: [] };
+    pd.notifications = pd.notifications || [];
+    var alreadyExists = pd.notifications.some(function (n) { return n.itemId === notif.itemId && n.message === notif.message; });
+    if (alreadyExists) return;
+    pd.notifications.unshift({
+        id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        itemId: notif.itemId, mediaType: notif.mediaType, title: notif.title,
+        posterPath: notif.posterPath || null, message: notif.message,
+        read: false, ts: Date.now()
+    });
+    if (pd.notifications.length > 40) pd.notifications = pd.notifications.slice(0, 40);
+    App._db.collection('users').doc(App.Auth.currentUser.uid).set({ profileData: App._rawProfileData }, { merge: true })
+        .then(function () { App.renderNotificationBell(); })
+        .catch(function (e) { console.error('addNotification failed', e); });
+};
+App.markNotificationRead = function (id) {
+    var profile = App.getActiveProfile();
+    if (!profile) return;
+    var pd = App._rawProfileData[profile.id];
+    if (!pd || !pd.notifications) return;
+    var n = pd.notifications.filter(function (x) { return x.id === id; })[0];
+    if (n) n.read = true;
+    App._db.collection('users').doc(App.Auth.currentUser.uid).set({ profileData: App._rawProfileData }, { merge: true }).catch(function () {});
+    App.renderNotificationBell();
+};
+App.markAllNotificationsRead = function () {
+    var profile = App.getActiveProfile();
+    if (!profile) return;
+    var pd = App._rawProfileData[profile.id];
+    if (!pd || !pd.notifications) return;
+    pd.notifications.forEach(function (n) { n.read = true; });
+    App._db.collection('users').doc(App.Auth.currentUser.uid).set({ profileData: App._rawProfileData }, { merge: true }).catch(function () {});
+    App.renderNotificationBell();
+};
+
+/* Checks shows in Continue Watching for episodes newer than what's been
+   watched. Runs once per browser session to keep TMDB calls reasonable. */
+App.checkForNewEpisodes = function () {
+    if (sessionStorage.getItem('tfrej_notif_checked')) return;
+    sessionStorage.setItem('tfrej_notif_checked', '1');
+    var tvShows = Object.keys(App.userData.progress || {})
+        .map(function (id) { return App.userData.progress[id]; })
+        .filter(function (p) { return p.media_type === 'tv'; });
+    tvShows.forEach(function (p) {
+        App.fetchJSON(App.BASE_URL + '/tv/' + p.id + '?api_key=' + App.API_KEY).then(function (data) {
+            var last = data.last_episode_to_air;
+            if (!last) return;
+            var isNewer = last.season_number > p.season || (last.season_number === p.season && last.episode_number > p.episode);
+            if (isNewer) {
+                App.addNotification({
+                    itemId: p.id, mediaType: 'tv', title: data.name || p.title, posterPath: data.poster_path,
+                    message: 'New episode: Season ' + last.season_number + ', Episode ' + last.episode_number
+                });
+            }
+        }).catch(function () {});
+    });
+};
+
+App.renderNotificationBell = function () {
+    var badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    var unread = App.getNotifications().filter(function (n) { return !n.read; }).length;
+    if (unread > 0) { badge.classList.remove('hidden'); badge.innerText = unread > 9 ? '9+' : String(unread); }
+    else badge.classList.add('hidden');
+};
+
+App._notifTimeAgo = function (ts) {
+    var diff = Date.now() - ts;
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + 'm ago';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ago';
+    var days = Math.floor(hours / 24);
+    if (days < 7) return days + 'd ago';
+    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+App._wireNotificationBell = function () {
+    var btn = document.getElementById('notif-bell-btn');
+    var panel = document.getElementById('notif-panel');
+    if (!btn || !panel) return;
+
+    var renderPanel = function () {
+        var notifs = App.getNotifications();
+        if (!notifs.length) {
+            panel.innerHTML = '<div class="p-6 text-center text-sm text-zinc-500">No notifications yet.</div>';
+            return;
+        }
+        panel.innerHTML =
+            '<div class="flex items-center justify-between px-4 py-3 border-b border-black/10 dark:border-white/10">' +
+                '<span class="font-bold text-sm text-black dark:text-white">Notifications</span>' +
+                '<button id="notif-mark-all-btn" class="text-xs font-bold text-primary hover:underline">Mark all read</button>' +
+            '</div>' +
+            '<div class="max-h-96 overflow-y-auto custom-scrollbar">' +
+                notifs.map(function (n) {
+                    var poster = n.posterPath ? (App.IMG_BASE_URL + n.posterPath) : App.NO_POSTER;
+                    return '<a href="title.html?type=' + n.mediaType + '&id=' + n.itemId + '" class="notif-item flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/10 border-b border-black/5 dark:border-white/5 last:border-0 ' + (n.read ? 'opacity-60' : '') + '" data-id="' + n.id + '">' +
+                        '<img src="' + poster + '" class="w-12 h-16 object-cover rounded-lg flex-shrink-0 bg-zinc-200 dark:bg-zinc-800">' +
+                        '<div class="min-w-0 flex-1">' +
+                            '<p class="text-sm font-bold text-black dark:text-white truncate">' + n.title + '</p>' +
+                            '<p class="text-xs text-zinc-500 truncate">' + n.message + '</p>' +
+                            '<p class="text-[10px] text-zinc-400 mt-0.5">' + App._notifTimeAgo(n.ts) + '</p>' +
+                        '</div>' +
+                        (n.read ? '' : '<span class="w-2 h-2 rounded-full bg-primary flex-shrink-0"></span>') +
+                    '</a>';
+                }).join('') +
+            '</div>';
+
+        var markAllBtn = document.getElementById('notif-mark-all-btn');
+        if (markAllBtn) markAllBtn.addEventListener('click', function (e) { e.stopPropagation(); App.markAllNotificationsRead(); renderPanel(); });
+        panel.querySelectorAll('.notif-item').forEach(function (item) {
+            item.addEventListener('click', function () { App.markNotificationRead(item.getAttribute('data-id')); });
+        });
+    };
+
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var willOpen = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden');
+        if (willOpen) renderPanel();
+    });
+    document.addEventListener('click', function (e) {
+        if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) panel.classList.add('hidden');
+    });
+};
+
 App.getActiveProfile = function () {
     return App._rawProfiles.filter(function (p) { return p.id === App.activeProfileId; })[0] || null;
 };
@@ -651,6 +793,48 @@ App.filterHiddenGenres = function (results) {
 /* Combines kids-safety filtering with this profile's own "hide this genre"
    preferences - use this everywhere content gets filtered, instead of
    calling filterKidsSafe directly. */
+/* ---------- LIKE/DISLIKE FEEDBACK (per profile) ---------- */
+App.setFeedback = function (item, mediaType, value) {
+    var profile = App.getActiveProfile();
+    if (!profile) return Promise.reject({ message: 'No active profile.' });
+    var pd = App._rawProfileData[profile.id] = App._rawProfileData[profile.id] || { watchlist: [], progress: {}, recent: [] };
+    pd.feedback = pd.feedback || {};
+    if (pd.feedback[item.id] && pd.feedback[item.id].value === value) {
+        delete pd.feedback[item.id]; // clicking the same reaction again clears it
+    } else {
+        pd.feedback[item.id] = {
+            value: value, mediaType: mediaType,
+            genreIds: (item.genres || []).map(function (g) { return g.id; }),
+            title: item.title || item.name || '', ts: Date.now()
+        };
+    }
+    return App._db.collection('users').doc(App.Auth.currentUser.uid).set({ profileData: App._rawProfileData }, { merge: true });
+};
+App.getFeedback = function (itemId) {
+    var profile = App.getActiveProfile();
+    var pd = profile && App._rawProfileData[profile.id];
+    return (pd && pd.feedback && pd.feedback[itemId]) ? pd.feedback[itemId].value : null;
+};
+App.getRecommendedGenre = function () {
+    var counts = {};
+    // Primary signal: things actually watched (Continue Watching progress)
+    Object.keys(App.userData.progress || {}).forEach(function (id) {
+        (App.userData.progress[id].genreIds || []).forEach(function (g) { counts[g] = (counts[g] || 0) + 2; });
+    });
+    // Secondary signal: explicit likes
+    var profile = App.getActiveProfile();
+    var pd = profile && App._rawProfileData[profile.id];
+    if (pd && pd.feedback) {
+        Object.keys(pd.feedback).forEach(function (id) {
+            var f = pd.feedback[id];
+            if (f.value !== 'like') return;
+            (f.genreIds || []).forEach(function (g) { counts[g] = (counts[g] || 0) + 1; });
+        });
+    }
+    var topId = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0];
+    return topId ? Number(topId) : null;
+};
+
 App.applyProfileFilters = function (results) {
     return App.filterHiddenGenres(App.filterKidsSafe(results));
 };
@@ -711,7 +895,11 @@ App.removeFromWatchlist = function (id) {
 };
 App.saveProgress = function (item, mediaType, season, episode) {
     if (!App.requireAuth()) return;
-    App.userData.progress[item.id] = { id: item.id, title: item.name || item.title, poster_path: item.poster_path, media_type: mediaType, season: season || null, episode: episode || null, ts: Date.now() };
+    App.userData.progress[item.id] = {
+        id: item.id, title: item.name || item.title, poster_path: item.poster_path,
+        media_type: mediaType, season: season || null, episode: episode || null,
+        genreIds: (item.genres || []).map(function (g) { return g.id; }), ts: Date.now()
+    };
     App.saveUserData();
 };
 App.removeFromContinue = function (id) {
@@ -831,6 +1019,13 @@ App.renderNav = function (activeHref) {
                 '</div>' +
                 '<div class="flex items-center gap-2">' +
                     '<div id="nav-auth-slot" class="hidden md:flex items-center gap-2"></div>' +
+                    '<div class="relative">' +
+                        '<button id="notif-bell-btn" aria-label="Notifications" class="relative p-2 bg-black/5 dark:bg-white/5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-zinc-700 dark:text-zinc-300">' +
+                            '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
+                            '<span id="notif-badge" class="hidden absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">0</span>' +
+                        '</button>' +
+                        '<div id="notif-panel" class="hidden absolute right-0 top-full mt-2 w-80 max-w-[90vw] bg-white dark:bg-black/95 border border-black/10 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"></div>' +
+                    '</div>' +
                     '<button onclick="App.toggleTheme()" aria-label="Toggle theme" class="p-2 bg-black/5 dark:bg-white/5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-zinc-700 dark:text-zinc-300">' +
                         '<svg class="hidden dark:block w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>' +
                         '<svg class="block dark:hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>' +
@@ -869,6 +1064,8 @@ App.renderNav = function (activeHref) {
 
     App.renderAuthNav();
     App.renderAnnouncementBanner();
+    App._wireNotificationBell();
+    App.renderNotificationBell();
 
     function navLink(href, label, active) {
         var isActive = active === href;
@@ -1053,6 +1250,25 @@ App.skeletons = function (count, horizontal) {
 /* ============================================================
    CARD RENDERING (links are real <a> hrefs to title.html -> real back button support)
    ============================================================ */
+App.renderTopTenRow = function (results, containerId, defaultMediaType) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var html = results.slice(0, 10).map(function (item, i) {
+        var mediaType = item.media_type || defaultMediaType;
+        var title = item.title || item.name || 'Untitled';
+        var posterPath = item.poster_path ? (App.IMG_BASE_URL + item.poster_path) : App.NO_POSTER;
+        var href = 'title.html?type=' + mediaType + '&id=' + item.id;
+        return '<a href="' + href + '" class="focusable flex-shrink-0 flex items-end -space-x-3 sm:-space-x-4">' +
+            '<span class="text-[64px] sm:text-[84px] md:text-[104px] font-black leading-[0.8] select-none flex-shrink-0" ' +
+                'style="-webkit-text-stroke: 2px #6d28d9; -webkit-text-fill-color: transparent; color: #6d28d9;">' + (i + 1) + '</span>' +
+            '<div class="poster-card relative w-24 sm:w-32 md:w-36 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-900 border border-black/10 dark:border-white/10 shadow-lg z-10">' +
+                '<img src="' + posterPath + '" class="w-full h-full object-cover" loading="lazy">' +
+            '</div>' +
+        '</a>';
+    }).join('');
+    container.innerHTML = html;
+};
+
 App.renderCards = function (results, containerId, defaultMediaType, horizontal, append, removeType) {
     var container = document.getElementById(containerId);
     if (!container) return;

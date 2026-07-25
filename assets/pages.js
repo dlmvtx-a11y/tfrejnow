@@ -102,8 +102,42 @@ App.renderListRows = function () {
         if (App.userData.watchlist.length) { wl.classList.remove('hidden'); App.renderCards(App.userData.watchlist, 'watchlist-results', null, true, false, 'watchlist'); }
         else wl.classList.add('hidden');
     }
+    App.fetchRecommendedForMeRow();
+    App.fetchTopTenRows();
 };
 App._onListsChanged = function () { App.renderListRows(); };
+
+App.fetchTopTenRows = function () {
+    App.fetchJSON(App.BASE_URL + '/trending/movie/day?api_key=' + App.API_KEY)
+        .then(function (d) { App.renderTopTenRow(App.applyProfileFilters(d.results || []), 'top10-movies-results', 'movie'); })
+        .catch(function () {});
+    App.fetchJSON(App.BASE_URL + '/trending/tv/day?api_key=' + App.API_KEY)
+        .then(function (d) { App.renderTopTenRow(App.applyProfileFilters(d.results || []), 'top10-tv-results', 'tv'); })
+        .catch(function () {});
+    App.fetchJSON(App.BASE_URL + '/discover/tv?api_key=' + App.API_KEY + '&with_genres=16&with_original_language=ja&sort_by=popularity.desc')
+        .then(function (d) { App.renderTopTenRow(App.applyProfileFilters(d.results || []), 'top10-anime-results', 'tv'); })
+        .catch(function () {});
+};
+
+App.fetchRecommendedForMeRow = function () {
+    var section = document.getElementById('recommended-forme-section');
+    if (!section) return;
+    var genreId = App.getRecommendedGenre ? App.getRecommendedGenre() : null;
+    if (!genreId) { section.classList.add('hidden'); return; }
+
+    section.classList.remove('hidden');
+    document.getElementById('recommended-forme-results').innerHTML = App.skeletons(10);
+    var movieP = App.fetchJSON(App.BASE_URL + '/discover/movie?api_key=' + App.API_KEY + '&with_genres=' + genreId + '&sort_by=popularity.desc');
+    var tvP = App.fetchJSON(App.BASE_URL + '/discover/tv?api_key=' + App.API_KEY + '&with_genres=' + genreId + '&sort_by=popularity.desc');
+    Promise.all([movieP, tvP]).then(function (r) {
+        var combined = (r[0].results || []).map(function (m) { m.media_type = 'movie'; return m; })
+            .concat((r[1].results || []).map(function (t) { t.media_type = 'tv'; return t; }));
+        combined.sort(function (a, b) { return (b.popularity || 0) - (a.popularity || 0); });
+        App.renderCards(App.applyProfileFilters(combined).slice(0, 10), 'recommended-forme-results', null);
+    }).catch(function () {
+        document.getElementById('recommended-forme-results').innerHTML = App.retryHtml('recommended-forme-results', 'App.fetchRecommendedForMeRow');
+    });
+};
 
 App.showHero = function (i) {
     App._heroIndex = i;

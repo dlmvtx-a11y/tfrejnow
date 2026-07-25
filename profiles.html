@@ -12,12 +12,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=16">
+    <link rel="stylesheet" href="assets/style.css?v=18">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=16"></script>
-    <script src="assets/app.js?v=16"></script>
+    <script src="assets/firebase-config.js?v=18"></script>
+    <script src="assets/app.js?v=18"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased flex flex-col items-center justify-center px-4 py-10">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -84,7 +84,11 @@
                     var id = tile.getAttribute('data-id');
                     var profile = App._rawProfiles.filter(function (p) { return p.id === id; })[0];
                     if (!profile) return;
-                    if (manageMode) { renderEditForm(profile); return; }
+                    if (manageMode) {
+                        if (profile.pin) { renderPinPrompt(profile, function () { renderEditForm(profile); }); }
+                        else { renderEditForm(profile); }
+                        return;
+                    }
                     if (profile.pin) { renderPinPrompt(profile); }
                     else { chooseProfile(profile); }
                 });
@@ -95,9 +99,15 @@
             document.querySelectorAll('.profile-delete-btn').forEach(function (btn) {
                 btn.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    if (!confirm('Delete this profile? Its watchlist and history will be lost.')) return;
-                    App.deleteProfile(btn.getAttribute('data-id')).then(renderPicker)
-                        .catch(function (err) { App.showToast(err.message || 'Failed to delete profile.'); });
+                    var id = btn.getAttribute('data-id');
+                    var profile = App._rawProfiles.filter(function (p) { return p.id === id; })[0];
+                    var doDelete = function () {
+                        if (!confirm('Delete this profile? Its watchlist and history will be lost.')) return;
+                        App.deleteProfile(id).then(renderPicker)
+                            .catch(function (err) { App.showToast(err.message || 'Failed to delete profile.'); });
+                    };
+                    if (profile && profile.pin) { renderPinPrompt(profile, doDelete); }
+                    else { doDelete(); }
                 });
             });
 
@@ -128,8 +138,13 @@
                     btn.innerText = '✕';
                     btn.addEventListener('click', function (e) {
                         e.stopPropagation();
-                        if (!confirm('Delete this profile? Its watchlist and history will be lost.')) return;
-                        App.deleteProfile(id).then(renderPicker).catch(function (err) { App.showToast(err.message || 'Failed to delete profile.'); });
+                        var profile = App._rawProfiles.filter(function (p) { return p.id === id; })[0];
+                        var doDelete = function () {
+                            if (!confirm('Delete this profile? Its watchlist and history will be lost.')) return;
+                            App.deleteProfile(id).then(renderPicker).catch(function (err) { App.showToast(err.message || 'Failed to delete profile.'); });
+                        };
+                        if (profile && profile.pin) { renderPinPrompt(profile, doDelete); }
+                        else { doDelete(); }
                     });
                     tile.querySelector('div').appendChild(btn);
                 });
@@ -141,7 +156,8 @@
             location.href = 'index.html';
         }
 
-        function renderPinPrompt(profile) {
+        function renderPinPrompt(profile, onSuccess) {
+            onSuccess = onSuccess || function () { chooseProfile(profile); };
             var body = document.getElementById('profiles-body');
             body.innerHTML =
                 '<div class="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl bg-gradient-to-br from-primary/70 to-primary/30">' + profile.avatar + '</div>' +
@@ -154,7 +170,7 @@
             input.focus();
             input.addEventListener('input', function () {
                 if (input.value.length !== 4) return;
-                if (input.value === profile.pin) { chooseProfile(profile); }
+                if (input.value === profile.pin) { onSuccess(); }
                 else { document.getElementById('pin-error').classList.remove('hidden'); input.value = ''; }
             });
             document.getElementById('pin-back-btn').addEventListener('click', renderPicker);

@@ -84,6 +84,8 @@ App.renderTitleDetails = function (data, mediaType) {
                     '<button onclick="App.startWatching()" class="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white px-9 py-4 rounded-xl font-bold text-lg md:text-xl shadow-lg shadow-primary/30 transition-transform transform hover:scale-105"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Watch Now</button>' +
                     '<button id="btn-watchlist" onclick="App.handleWatchlistToggle()" class="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-6 py-4 rounded-xl font-bold text-base md:text-lg"></button>' +
                     (App._trailerKeyFor(data) ? '<button onclick="App.openTrailer()" class="flex items-center gap-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white px-6 py-4 rounded-xl font-bold text-base md:text-lg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> Trailer</button>' : '') +
+                    '<button id="btn-like" onclick="App.handleFeedback(\'like\')" class="flex items-center justify-center bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white w-14 h-14 rounded-xl" aria-label="Like" title="Like"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>' +
+                    '<button id="btn-dislike" onclick="App.handleFeedback(\'dislike\')" class="flex items-center justify-center bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white w-14 h-14 rounded-xl" aria-label="Dislike" title="Dislike"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg></button>' +
                 '</div>' +
                 '<div class="w-full"><h3 class="text-xl md:text-2xl font-black text-black dark:text-white mb-5">Top Cast</h3>' + App._scrollRowShell('detail-cast') + '</div>' +
             '</div>' +
@@ -93,6 +95,7 @@ App.renderTitleDetails = function (data, mediaType) {
         '<div id="recommended-section" class="w-full mt-14 md:mt-20 hidden"><h3 class="text-2xl md:text-3xl font-black text-black dark:text-white mb-6 border-l-4 border-primary pl-4">Recommended For You</h3>' + App._scrollRowShell('recommended-results') + '</div>';
 
     App.renderWatchlistButton();
+    App.renderFeedbackButtons();
     App.renderCastRow(data);
 
     // Similar (type-aware; anime gets language-filtered / discover fallback)
@@ -147,7 +150,25 @@ App.handleWatchlistToggle = function () {
     App.toggleWatchlist(App.currentItemData, App.currentMediaType);
     setTimeout(App.renderWatchlistButton, 0);
 };
-App._onListsChanged = function () { App.renderWatchlistButton(); };
+App._onListsChanged = function () { App.renderWatchlistButton(); App.renderFeedbackButtons(); };
+
+App.renderFeedbackButtons = function () {
+    if (!App.currentItemData) return;
+    var likeBtn = document.getElementById('btn-like');
+    var dislikeBtn = document.getElementById('btn-dislike');
+    if (!likeBtn || !dislikeBtn) return;
+    var current = App.getFeedback(App.currentItemData.id);
+    var activeCls = 'flex items-center justify-center bg-primary border border-primary text-white w-14 h-14 rounded-xl';
+    var idleCls = 'flex items-center justify-center bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-black/10 dark:border-white/10 text-black dark:text-white w-14 h-14 rounded-xl';
+    likeBtn.className = current === 'like' ? activeCls : idleCls;
+    dislikeBtn.className = current === 'dislike' ? activeCls : idleCls;
+};
+App.handleFeedback = function (value) {
+    if (!App.requireAuth() || !App.currentItemData) return;
+    App.setFeedback(App.currentItemData, App.currentMediaType, value)
+        .then(function () { App.renderFeedbackButtons(); })
+        .catch(function (e) { console.error(e); App.showToast(e.message || 'Failed to save your feedback.'); });
+};
 
 App.renderCastRow = function (data) {
     var castContainer = document.getElementById('detail-cast');
