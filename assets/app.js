@@ -886,50 +886,49 @@ App.renderAuthNav = function () {
     if (!deskSlot && !mobSlot) return;
     var user = App.Auth.currentUser;
     if (user) {
-        var displayName = (App.userData && App.userData.username) ? App.userData.username : user.email;
+        var username = (App.userData && App.userData.username) ? App.userData.username : user.email;
         var activeProfile = App.getActiveProfile ? App.getActiveProfile() : null;
         var otherProfiles = activeProfile ? (App._rawProfiles || []).filter(function (p) { return p.id !== activeProfile.id; }) : [];
-        var hasMultiple = otherProfiles.length > 0;
+        var triggerLabel = activeProfile ? activeProfile.name : username;
+        var triggerAvatar = activeProfile ? activeProfile.avatar : '👤';
 
-        var profileChip = '';
-        if (activeProfile) {
-            if (hasMultiple) {
-                var dropdownItems = otherProfiles.map(function (p) {
-                    return '<button class="profile-switch-item w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-left" data-id="' + p.id + '">' +
-                        '<span class="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-sm flex-shrink-0">' + p.avatar + '</span>' +
-                        '<span class="text-sm font-bold text-black dark:text-white truncate">' + p.name + '</span>' +
-                        (p.pin ? '<span class="ml-auto text-xs flex-shrink-0">🔒</span>' : '') +
-                    '</button>';
-                }).join('');
-                profileChip =
-                    '<div class="relative">' +
-                        '<button id="profile-dropdown-btn" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-2.5 py-1 rounded-full transition-colors">' +
-                            '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
-                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>' +
-                        '</button>' +
-                        '<div id="profile-dropdown-panel" class="hidden absolute right-0 top-full mt-2 w-56 bg-white dark:bg-black/95 border border-black/10 dark:border-white/10 rounded-xl shadow-2xl p-2 z-50">' +
-                            dropdownItems +
-                            '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' +
-                            '<a href="profiles.html" class="block w-full px-3 py-2.5 text-sm font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">Manage Profiles</a>' +
-                        '</div>' +
-                    '</div>';
-            } else {
-                profileChip = '<a href="profiles.html" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-3 py-1 rounded-full transition-colors" title="Manage Profiles">' +
-                    '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name +
-                '</a>';
-            }
+        var switchItemsHtml = otherProfiles.map(function (p) {
+            return '<button class="profile-switch-item w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-left" data-id="' + p.id + '">' +
+                '<span class="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-sm flex-shrink-0">' + p.avatar + '</span>' +
+                '<span class="text-sm font-bold text-black dark:text-white truncate">' + p.name + '</span>' +
+                (p.pin ? '<span class="ml-auto text-xs flex-shrink-0">🔒</span>' : '') +
+            '</button>';
+        }).join('');
+
+        var panelInner =
+            (otherProfiles.length ? '<p class="px-3 pt-1 pb-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Switch Profile</p>' + switchItemsHtml + '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' : '') +
+            '<a href="profiles.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">🔀 Manage Profiles</a>' +
+            '<a href="profile.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">⚙️ Account Settings</a>' +
+            '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' +
+            '<button onclick="App.signOutUser()" class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-lg text-left">🚪 Sign Out</button>';
+
+        if (deskSlot) {
+            deskSlot.innerHTML =
+                '<div class="relative">' +
+                    '<button id="account-dropdown-btn" class="flex items-center gap-2 text-xs font-bold text-white bg-primary hover:bg-primary/80 pl-1.5 pr-2.5 py-1 rounded-full transition-colors">' +
+                        '<span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + triggerAvatar + '</span>' +
+                        '<span class="max-w-[100px] truncate">' + triggerLabel + '</span>' +
+                        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>' +
+                    '</button>' +
+                    '<div id="account-dropdown-panel" class="hidden absolute right-0 top-full mt-2 w-60 bg-white dark:bg-black/95 border border-black/10 dark:border-white/10 rounded-xl shadow-2xl p-2 z-50">' +
+                        panelInner +
+                    '</div>' +
+                '</div>';
         }
-
-        if (deskSlot) deskSlot.innerHTML = profileChip + '<a href="profile.html" class="text-xs font-medium text-zinc-400 dark:text-zinc-500 max-w-[110px] truncate hover:text-primary transition-colors" title="Account settings">' + displayName + '</a><button onclick="App.signOutUser()" class="text-xs font-bold px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10">Sign Out</button>';
         if (mobSlot) {
-            var mobProfileLinks = activeProfile
-                ? '<div class="px-6 py-3 flex items-center gap-2 text-xs font-bold text-white bg-primary/90"><span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + activeProfile.avatar + '</span>' + activeProfile.name + ' (Current Profile)</div>' +
-                  otherProfiles.map(function (p) {
-                      return '<button class="profile-switch-item w-full text-left px-6 py-3 flex items-center gap-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10" data-id="' + p.id + '"><span class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm">' + p.avatar + '</span>' + p.name + (p.pin ? ' 🔒' : '') + '</button>';
-                  }).join('') +
-                  '<a href="profiles.html" class="block px-6 py-3 text-xs font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10">Manage Profiles</a>'
-                : '';
-            mobSlot.innerHTML = mobProfileLinks + '<a href="profile.html" class="block px-6 py-3.5 text-xs font-medium text-zinc-500 truncate hover:text-primary transition-colors border-t border-black/5 dark:border-white/5">Account: ' + displayName + '</a><button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10">Sign Out</button>';
+            mobSlot.innerHTML =
+                '<div class="px-6 py-3 flex items-center gap-2 text-xs font-bold text-white bg-primary/90"><span class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-sm">' + triggerAvatar + '</span>' + triggerLabel + '</div>' +
+                otherProfiles.map(function (p) {
+                    return '<button class="profile-switch-item w-full text-left px-6 py-3 flex items-center gap-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10" data-id="' + p.id + '"><span class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-sm">' + p.avatar + '</span>' + p.name + (p.pin ? ' 🔒' : '') + '</button>';
+                }).join('') +
+                '<a href="profiles.html" class="block px-6 py-3 text-xs font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10">🔀 Manage Profiles</a>' +
+                '<a href="profile.html" class="block px-6 py-3 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10">⚙️ Account Settings</a>' +
+                '<button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10 border-t border-black/5 dark:border-white/5">🚪 Sign Out</button>';
         }
 
         App._wireProfileDropdown();
@@ -940,8 +939,8 @@ App.renderAuthNav = function () {
 };
 
 App._wireProfileDropdown = function () {
-    var btn = document.getElementById('profile-dropdown-btn');
-    var panel = document.getElementById('profile-dropdown-panel');
+    var btn = document.getElementById('account-dropdown-btn');
+    var panel = document.getElementById('account-dropdown-panel');
     if (btn && panel) {
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
