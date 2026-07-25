@@ -12,13 +12,13 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=18">
+    <link rel="stylesheet" href="assets/style.css?v=19">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=18"></script>
-    <script src="assets/app.js?v=18"></script>
-    <script src="assets/pages.js?v=18"></script>
+    <script src="assets/firebase-config.js?v=19"></script>
+    <script src="assets/app.js?v=19"></script>
+    <script src="assets/pages.js?v=19"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
@@ -29,6 +29,24 @@
     <div id="nav-root"></div>
 
     <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-[1800px] px-4 sm:px-6 md:px-10 lg:px-16 w-full flex-1">
+        <form onsubmit="return false;" class="mx-auto mb-6 flex w-full max-w-[772px] flex-col gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/40 p-3 backdrop-blur-md shadow-xl">
+            <div class="flex flex-1 items-center gap-3 rounded-xl border border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 px-4 focus-within:border-primary/50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5 text-zinc-500 dark:text-zinc-400"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.34-4.34"></path></svg>
+                <input id="search-input" type="text" autocomplete="off" placeholder="Type a movie, TV show, or anime name..." class="h-12 w-full bg-transparent text-black dark:text-white outline-none placeholder:text-zinc-500">
+            </div>
+        </form>
+
+        <div class="relative mb-8">
+            <button type="button" onclick="App.scrollRow('genre-row',-1)" aria-label="Scroll left" class="flex absolute -left-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white transition-colors">‹</button>
+            <div id="genre-row" class="flex gap-2 overflow-x-auto no-scrollbar py-2 px-8 scroll-smooth"></div>
+            <button type="button" onclick="App.scrollRow('genre-row',1)" aria-label="Scroll right" class="flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white transition-colors">›</button>
+        </div>
+
+        <div class="mb-12">
+            <h2 class="text-2xl md:text-3xl font-black text-black dark:text-white mb-6 border-l-4 border-primary pl-4">Top 10 Movies Today</h2>
+            <div id="top10-page-results" class="flex gap-6 sm:gap-8 overflow-x-auto no-scrollbar pb-4 pt-6"></div>
+        </div>
+
         <h1 id="browse-title" class="text-2xl md:text-4xl font-black text-black dark:text-white mb-8 border-l-4 border-primary pl-4">Popular Movies</h1>
         <div id="browse-loading" class="py-10 flex justify-center items-center gap-2">
             <div class="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
@@ -46,6 +64,8 @@
     <script>
         App.initFirebase();
         App.gateSiteAccess();
+        App.onAuthReady(function(){ App.renderGenreBar('genre-row'); App.wireRowDrag('genre-row'); App.wireHomeSearch();
+        document.getElementById('top10-page-results').innerHTML = App.skeletons(10, true); App.fetchJSON(App.BASE_URL + '/trending/movie/day?api_key=' + App.API_KEY).then(function(d){ App.renderTopTenRow(App.applyProfileFilters(d.results || []), 'top10-page-results', 'movie'); }).catch(function(){}); });
         App.initSectionPage('movie', 'movies.html');
     </script>
 </body>
