@@ -332,8 +332,9 @@ App._renderUsersTable = function (filter) {
     if (!list.length) { body.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-zinc-500">No users found.</td></tr>'; return; }
 
     body.innerHTML = list.map(function (u) {
-        var wlCount = (u.watchlist || []).length;
-        var progCount = Object.keys(u.progress || {}).length;
+        var pd = u.profileData || {};
+        var wlCount = Object.keys(pd).reduce(function (sum, pid) { return sum + ((pd[pid].watchlist || []).length); }, 0);
+        var progCount = Object.keys(pd).reduce(function (sum, pid) { return sum + Object.keys(pd[pid].progress || {}).length; }, 0);
         var banned = App.isCurrentlyBanned(u);
         var pending = u.approved === false;
         var statusHtml;
@@ -363,6 +364,26 @@ App._renderUsersTable = function (filter) {
 /* ============================================================
    ADMIN ACTIONS ON A USER
    ============================================================ */
+App.adminUpdateProfile = function (uid, profileId, changes) {
+    var ref = App._db.collection('users').doc(uid);
+    return ref.get().then(function (doc) {
+        var profiles = (doc.data().profiles || []).map(function (p) {
+            return p.id === profileId ? Object.assign({}, p, changes) : p;
+        });
+        return ref.set({ profiles: profiles }, { merge: true });
+    });
+};
+App.adminDeleteProfile = function (uid, profileId) {
+    var ref = App._db.collection('users').doc(uid);
+    return ref.get().then(function (doc) {
+        var d = doc.data();
+        var profiles = (d.profiles || []).filter(function (p) { return p.id !== profileId; });
+        var profileData = Object.assign({}, d.profileData || {});
+        delete profileData[profileId];
+        return ref.set({ profiles: profiles, profileData: profileData }, { merge: true });
+    });
+};
+
 App.adminApproveUser = function (uid, email) {
     return App._db.collection('users').doc(uid).set({ approved: true, approvedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
         .then(function () { return App.sendUserApprovedEmail(email); });
@@ -508,7 +529,15 @@ App._renderUserDetailBody = function (u, logs) {
             var pd = profileData[p.id] || {};
             var wl = (pd.watchlist || []).length;
             var prog = Object.keys(pd.progress || {}).length;
-            return '<li>' + (p.avatar || '👤') + ' <strong>' + p.name + '</strong>' + (p.isKids ? ' <span class="text-[10px] text-primary font-bold">KIDS</span>' : '') + ' — ' + wl + ' saved, ' + prog + ' in progress</li>';
+            return '<li class="flex items-center justify-between gap-2 flex-wrap py-1.5 border-b border-black/5 dark:border-white/5 last:border-0">' +
+                '<span>' + (p.avatar || '👤') + ' <strong>' + p.name + '</strong>' + (p.isKids ? ' <span class="text-[10px] text-primary font-bold">KIDS</span>' : '') + (p.pin ? ' <span class="text-[10px]">🔒</span>' : '') + ' — ' + wl + ' saved, ' + prog + ' in progress</span>' +
+                '<span class="flex gap-2 flex-shrink-0">' +
+                    '<button class="admin-profile-rename text-[10px] font-bold text-primary hover:underline" data-pid="' + p.id + '">Rename</button>' +
+                    '<button class="admin-profile-togglekids text-[10px] font-bold text-primary hover:underline" data-pid="' + p.id + '">' + (p.isKids ? 'Unset Kids' : 'Set Kids') + '</button>' +
+                    (p.pin ? '<button class="admin-profile-clearpin text-[10px] font-bold text-orange-500 hover:underline" data-pid="' + p.id + '">Clear PIN</button>' : '') +
+                    (profiles.length > 1 ? '<button class="admin-profile-delete text-[10px] font-bold text-red-500 hover:underline" data-pid="' + p.id + '">Delete</button>' : '') +
+                '</span>' +
+            '</li>';
         }).join('')
         : '<li class="text-zinc-500">No profiles yet (account not activated)</li>';
     var restrictedHtml = (u.restrictedTitles || []).length
@@ -642,6 +671,49 @@ App._renderLoginHistorySection = function (logs, errorMsg) {
 App._wireUserDetailActions = function (u) {
     var refreshTable = function () { App._renderUsersTable(document.getElementById('user-search-input').value.trim().toLowerCase()); };
     var reopen = function () { App._viewUserDetail(u.id); };
+
+    document.querySelectorAll('.admin-profile-rename').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pid = btn.getAttribute('data-pid');
+            var current = (u.profiles || []).filter(function (p) { return p.id === pid; })[0];
+            var newName = prompt('New profile name:', current ? current.name : '');
+            if (!newName || !newName.trim()) return;
+            App.adminUpdateProfile(u.id, pid, { name: newName.trim() }).then(function () {
+                App.showToast('Profile renamed');
+                refreshTable(); reopen();
+            }).catch(function (e) { console.error(e); App.showToast('Failed to rename profile.'); });
+        });
+    });
+    document.querySelectorAll('.admin-profile-togglekids').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pid = btn.getAttribute('data-pid');
+            var current = (u.profiles || []).filter(function (p) { return p.id === pid; })[0];
+            App.adminUpdateProfile(u.id, pid, { isKids: !(current && current.isKids) }).then(function () {
+                App.showToast('Profile updated');
+                refreshTable(); reopen();
+            }).catch(function (e) { console.error(e); App.showToast('Failed to update profile.'); });
+        });
+    });
+    document.querySelectorAll('.admin-profile-clearpin').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pid = btn.getAttribute('data-pid');
+            if (!confirm('Clear the PIN for this profile?')) return;
+            App.adminUpdateProfile(u.id, pid, { pin: null }).then(function () {
+                App.showToast('PIN cleared');
+                refreshTable(); reopen();
+            }).catch(function (e) { console.error(e); App.showToast('Failed to clear PIN.'); });
+        });
+    });
+    document.querySelectorAll('.admin-profile-delete').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pid = btn.getAttribute('data-pid');
+            if (!confirm('Delete this profile? Its watchlist and history will be lost.')) return;
+            App.adminDeleteProfile(u.id, pid).then(function () {
+                App.showToast('Profile deleted');
+                refreshTable(); reopen();
+            }).catch(function (e) { console.error(e); App.showToast('Failed to delete profile.'); });
+        });
+    });
 
     var approveBtn = document.getElementById('admin-approve-btn');
     if (approveBtn) approveBtn.addEventListener('click', function () {

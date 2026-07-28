@@ -12,18 +12,19 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=20">
+    <link rel="stylesheet" href="assets/style.css?v=21">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=20"></script>
-    <script src="assets/app.js?v=20"></script>
-    <script src="assets/pages.js?v=20"></script>
+    <script src="assets/firebase-config.js?v=21"></script>
+    <script src="assets/app.js?v=21"></script>
+    <script src="assets/pages.js?v=21"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
-        <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <span class="text-zinc-400 text-sm font-bold">Checking your session...</span>
+        <div class="loading-logo-pulse text-3xl sm:text-4xl font-black tracking-tighter"><span class="text-white">Tfrej</span><span class="text-primary">NOW</span></div>
+        <div class="w-7 h-7 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-zinc-500 text-xs font-bold tracking-wide">Checking your session...</span>
     </div>
     <div class="fixed inset-0 bg-gradient-to-b from-lightbg/90 via-lightbg to-lightbg dark:from-black/80 dark:via-background/90 dark:to-background pointer-events-none"></div>
     <div id="nav-root"></div>
@@ -32,7 +33,7 @@
         <form onsubmit="return false;" class="mx-auto mb-6 flex w-full max-w-[772px] flex-col gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/40 p-3 backdrop-blur-md shadow-xl">
             <div class="flex flex-1 items-center gap-3 rounded-xl border border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 px-4 focus-within:border-primary/50 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5 text-zinc-500 dark:text-zinc-400"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.34-4.34"></path></svg>
-                <input id="search-input" type="text" autocomplete="off" placeholder="Type a movie, TV show, or anime name..." class="h-12 w-full bg-transparent text-black dark:text-white outline-none placeholder:text-zinc-500">
+                <input id="search-input" type="text" autocomplete="off" placeholder="Search for a movie..." class="h-12 w-full bg-transparent text-black dark:text-white outline-none placeholder:text-zinc-500">
             </div>
         </form>
 

@@ -523,6 +523,12 @@ App.requireAuth = function () {
    ============================================================ */
 App.MAX_PROFILES = 5;
 App.DEFAULT_AVATARS = ['🎬', '🍿', '👾', '🚀', '🦁', '🐉', '🎮', '⚡', '🌟', '🦊', '🐺', '🎨'];
+App.AVATAR_COLORS = {
+    '🎬': '#dc2626', '🍿': '#ea580c', '👾': '#7c3aed', '🚀': '#0284c7',
+    '🦁': '#d97706', '🐉': '#16a34a', '🎮': '#db2777', '⚡': '#ca8a04',
+    '🌟': '#6d28d9', '🦊': '#c2410c', '🐺': '#475569', '🎨': '#0891b2'
+};
+App.avatarColorFor = function (emoji) { return App.AVATAR_COLORS[emoji] || '#6d28d9'; };
 App.AVATAR_COLORS = ['#6d28d9', '#dc2626', '#0891b2', '#ca8a04', '#16a34a', '#db2777', '#4f46e5', '#ea580c'];
 
 App.userData = { watchlist: [], progress: {}, recent: [], blocked: false, blockedUntil: null, restrictedTitles: [], approved: true };
@@ -1091,7 +1097,7 @@ App.renderAuthNav = function () {
 
         var switchItemsHtml = otherProfiles.map(function (p) {
             return '<button class="profile-switch-item w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-left" data-id="' + p.id + '">' +
-                '<span class="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-sm flex-shrink-0">' + p.avatar + '</span>' +
+                '<span class="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0" style="background-color:' + App.avatarColorFor(p.avatar) + '22; border:1.5px solid ' + App.avatarColorFor(p.avatar) + '">' + p.avatar + '</span>' +
                 '<span class="text-sm font-bold text-black dark:text-white truncate">' + p.name + '</span>' +
                 (p.pin ? '<span class="ml-auto text-xs flex-shrink-0">🔒</span>' : '') +
             '</button>';
@@ -1258,11 +1264,11 @@ App.renderTopTenRow = function (results, containerId, defaultMediaType) {
         var title = item.title || item.name || 'Untitled';
         var posterPath = item.poster_path ? (App.IMG_BASE_URL + item.poster_path) : App.NO_POSTER;
         var href = 'title.html?type=' + mediaType + '&id=' + item.id;
-        return '<a href="' + href + '" class="focusable flex-shrink-0 flex items-end -space-x-3 sm:-space-x-4">' +
+        return '<a href="' + href + '" class="focusable flex-shrink-0 flex items-end -space-x-3 sm:-space-x-4 fade-in-scale" style="animation-delay:' + Math.min(i * 60, 400) + 'ms; opacity:0;">' +
             '<span class="text-[64px] sm:text-[84px] md:text-[104px] font-black leading-[0.8] select-none flex-shrink-0" ' +
                 'style="-webkit-text-stroke: 2px #6d28d9; -webkit-text-fill-color: transparent; color: #6d28d9;">' + (i + 1) + '</span>' +
             '<div class="poster-card relative w-24 sm:w-32 md:w-36 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-900 border border-black/10 dark:border-white/10 shadow-lg z-10">' +
-                '<img src="' + posterPath + '" class="w-full h-full object-cover" loading="lazy">' +
+                '<img src="' + posterPath + '" onerror="this.onerror=null;this.src=\'' + App.NO_POSTER + '\';" class="w-full h-full object-cover" loading="lazy">' +
             '</div>' +
         '</a>';
     }).join('');
@@ -1275,7 +1281,7 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
     if (!append) container.innerHTML = '';
 
     var html = '';
-    results.forEach(function (item) {
+    results.forEach(function (item, cardIndex) {
         var mediaType = item.media_type || defaultMediaType;
         if (mediaType !== 'movie' && mediaType !== 'tv') return;
 
@@ -1302,10 +1308,10 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
         }
 
         html += '' +
-            '<a href="' + href + '" class="poster-card ' + (horizontal ? 'w-40 sm:w-48 md:w-56 lg:w-60 flex-shrink-0' : '') + ' focusable block bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 cursor-pointer group shadow-md relative">' +
+            '<a href="' + href + '" class="poster-card fade-in-scale ' + (horizontal ? 'w-40 sm:w-48 md:w-56 lg:w-60 flex-shrink-0' : '') + ' focusable block bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 cursor-pointer group shadow-md relative" style="animation-delay:' + Math.min(cardIndex * 40, 400) + 'ms; opacity:0;">' +
                 progressTag + removeBtn +
                 '<div class="relative aspect-[2/3] overflow-hidden bg-zinc-200 dark:bg-zinc-900">' +
-                    '<img src="' + posterPath + '" class="w-full h-full object-cover group-hover:scale-110" loading="lazy">' +
+                    '<img src="' + posterPath + '" onerror="this.onerror=null;this.src=\'' + App.NO_POSTER + '\';" class="w-full h-full object-cover group-hover:scale-110" loading="lazy">' +
                     '<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/25">' +
                         '<div class="bg-primary text-white rounded-full p-3.5 shadow-lg shadow-primary/50"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
                     '</div>' +

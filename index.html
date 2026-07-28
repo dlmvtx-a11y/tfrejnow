@@ -14,19 +14,20 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=20">
+    <link rel="stylesheet" href="assets/style.css?v=21">
 
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=20"></script>
-    <script src="assets/app.js?v=20"></script>
-    <script src="assets/pages.js?v=20"></script>
+    <script src="assets/firebase-config.js?v=21"></script>
+    <script src="assets/app.js?v=21"></script>
+    <script src="assets/pages.js?v=21"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
-        <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <span class="text-zinc-400 text-sm font-bold">Checking your session...</span>
+        <div class="loading-logo-pulse text-3xl sm:text-4xl font-black tracking-tighter"><span class="text-white">Tfrej</span><span class="text-primary">NOW</span></div>
+        <div class="w-7 h-7 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-zinc-500 text-xs font-bold tracking-wide">Checking your session...</span>
     </div>
     <img id="global-bg" src="" alt="" class="fixed inset-0 w-full h-full object-cover opacity-5 dark:opacity-10 pointer-events-none transition-all duration-1000 hidden md:block">
     <div class="fixed inset-0 bg-gradient-to-b from-lightbg/90 via-lightbg to-lightbg dark:from-black/80 dark:via-background/90 dark:to-background pointer-events-none"></div>
@@ -67,7 +68,7 @@
             <button type="button" onclick="App.scrollRow('genre-row',1)" aria-label="Scroll right" class="flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white transition-colors">›</button>
         </div>
 
-        <div class="mt-8 flex flex-col gap-12 w-full">
+        <div class="mt-8 flex flex-col gap-9 sm:gap-11 md:gap-14 w-full">
             <div id="continue-section" class="hidden">
                 <h2 class="text-2xl md:text-3xl font-black text-black dark:text-white mb-6 border-l-4 border-primary pl-3">Continue Watching</h2>
                 <div id="continue-results-shell"></div>

@@ -67,14 +67,23 @@ App.renderTitleDetails = function (data, mediaType) {
         runtimeText = data.episode_run_time[0] + 'm/ep';
     }
 
+    var typeLabel = isAnime ? 'Anime' : (mediaType === 'movie' ? 'Movie' : 'TV Show');
+    var countryName = (data.production_countries && data.production_countries.length) ? data.production_countries[0].name : null;
+    var seasonsEpisodesText = (mediaType === 'tv' && data.number_of_seasons)
+        ? data.number_of_seasons + ' Season' + (data.number_of_seasons !== 1 ? 's' : '') + (data.number_of_episodes ? ' · ' + data.number_of_episodes + ' Episodes' : '')
+        : null;
+
     document.getElementById('title-body').innerHTML =
         '<div class="flex flex-col md:flex-row gap-8 lg:gap-14 w-full">' +
-            '<div class="w-56 sm:w-64 md:w-80 lg:w-96 flex-shrink-0 mx-auto md:mx-0"><img src="' + (data.poster_path ? App.IMG_BASE_URL + data.poster_path : App.NO_POSTER) + '" alt="" class="w-full rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900"></div>' +
+            '<div class="w-56 sm:w-64 md:w-80 lg:w-96 flex-shrink-0 mx-auto md:mx-0"><img src="' + (data.poster_path ? App.IMG_BASE_URL + data.poster_path : App.NO_POSTER) + '" alt="" onerror="this.onerror=null;this.src=\'' + App.NO_POSTER + '\';" class="w-full rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900"></div>' +
             '<div class="flex flex-col justify-center flex-1 text-center md:text-left min-w-0">' +
+                '<span class="inline-block self-center md:self-start bg-primary text-white text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded mb-3">' + typeLabel + '</span>' +
                 '<h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-black dark:text-white mb-3 leading-[1.05]">' + (data.title || data.name || '') + '</h1>' +
                 '<div class="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-bold text-zinc-600 dark:text-zinc-400 mb-6">' +
                     '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + (data.release_date || data.first_air_date || 'N/A').substring(0, 4) + '</span>' +
                     (runtimeText ? '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + runtimeText + '</span>' : '') +
+                    (seasonsEpisodesText ? '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + seasonsEpisodesText + '</span>' : '') +
+                    (countryName ? '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + countryName + '</span>' : '') +
                     (data.status ? '<span class="bg-black/5 dark:bg-white/10 px-2.5 py-1 rounded border border-black/10 dark:border-white/5">' + data.status + '</span>' : '') +
                     '<span class="flex items-center gap-1 text-yellow-500 font-bold"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' + (data.vote_average ? data.vote_average.toFixed(1) : 'NR') + '</span>' +
                     '<span>' + (data.genres ? data.genres.map(function (g) { return g.name; }).join(', ') : '') + '</span>' +
@@ -181,7 +190,7 @@ App.renderCastRow = function (data) {
         a.href = 'cast.html?id=' + actor.id + '&name=' + encodeURIComponent(actor.name);
         a.className = 'w-28 sm:w-32 md:w-36 flex-shrink-0 text-center block group focusable rounded';
         a.innerHTML =
-            '<img src="' + img + '" class="w-full aspect-[2/3] object-cover rounded-xl mb-2 border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900 shadow group-hover:border-primary transition-colors">' +
+            '<img src="' + img + '" onerror="this.onerror=null;this.src=\'' + App.NO_PHOTO + '\';" class="w-full aspect-[2/3] object-cover rounded-xl mb-2 border border-black/10 dark:border-white/10 bg-zinc-200 dark:bg-zinc-900 shadow group-hover:border-primary transition-colors">' +
             '<p class="text-[11px] text-black dark:text-white font-bold leading-tight line-clamp-1">' + actor.name + '</p>' +
             '<p class="text-[9px] text-zinc-500 line-clamp-1 mt-0.5">' + (actor.character || '') + '</p>';
         castContainer.appendChild(a);
@@ -379,7 +388,7 @@ App.fetchEpisodes = function (tmdbId, seasonNumber) {
 
                 epDiv.innerHTML = '' +
                     '<div class="w-36 sm:w-44 md:w-60 aspect-video flex-shrink-0 bg-zinc-200 dark:bg-zinc-900 rounded-xl overflow-hidden relative border border-black/10 dark:border-white/5">' +
-                        '<img src="' + stillPath + '" class="w-full h-full object-cover">' +
+                        '<img src="' + stillPath + '" onerror="this.onerror=null;this.src=\'' + App.NO_STILL + '\';" class="w-full h-full object-cover">' +
                         '<div class="absolute bottom-1.5 right-1.5 bg-black/80 px-2 py-1 text-[11px] font-bold rounded text-white shadow">E' + ep.episode_number + '</div>' +
                         (isActive ? '<div class="absolute inset-0 bg-primary/30 flex items-center justify-center"><div class="bg-primary rounded-full p-2.5 shadow-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div></div>' : '') +
                     '</div>' +

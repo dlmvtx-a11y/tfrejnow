@@ -12,17 +12,18 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=20">
+    <link rel="stylesheet" href="assets/style.css?v=21">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=20"></script>
-    <script src="assets/app.js?v=20"></script>
+    <script src="assets/firebase-config.js?v=21"></script>
+    <script src="assets/app.js?v=21"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased flex flex-col items-center justify-center px-4 py-10">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-4">
-        <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <span class="text-zinc-400 text-sm font-bold">Checking your session...</span>
+        <div class="loading-logo-pulse text-3xl sm:text-4xl font-black tracking-tighter"><span class="text-white">Tfrej</span><span class="text-primary">NOW</span></div>
+        <div class="w-7 h-7 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-zinc-500 text-xs font-bold tracking-wide">Checking your session...</span>
     </div>
 
     <a href="index.html" class="mb-10 fade-enter-active"><span class="text-3xl font-black tracking-tighter">Tfrej<span class="text-primary">NOW</span></span></a>
@@ -47,30 +48,31 @@
             var body = document.getElementById('profiles-body');
             var profiles = App._rawProfiles || [];
 
-            var tilesHtml = profiles.map(function (p) {
+            var tilesHtml = profiles.map(function (p, idx) {
+                var color = App.avatarColorFor(p.avatar);
                 return '' +
-                    '<div class="profile-tile flex flex-col items-center gap-3 cursor-pointer group" data-id="' + p.id + '">' +
-                        '<div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-5xl bg-gradient-to-br from-primary/70 to-primary/30 border-4 border-transparent group-hover:border-primary transition-all duration-300 group-hover:scale-105">' +
+                    '<div class="profile-tile flex flex-col items-center gap-3 cursor-pointer group fade-in-scale" style="animation-delay:' + (idx * 60) + 'ms; opacity:0;" data-id="' + p.id + '">' +
+                        '<div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-5xl border-4 border-transparent group-hover:border-white transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1 shadow-lg" style="background:linear-gradient(145deg,' + color + 'cc,' + color + '66); box-shadow: 0 8px 24px -8px ' + color + '88;">' +
                             p.avatar +
-                            (p.isKids ? '<span class="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">KIDS</span>' : '') +
-                            (p.pin ? '<span class="absolute top-1.5 right-1.5 text-sm">🔒</span>' : '') +
+                            (p.isKids ? '<span class="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap shadow">KIDS</span>' : '') +
+                            (p.pin ? '<span class="absolute top-1.5 right-1.5 text-sm drop-shadow">🔒</span>' : '') +
                             (manageMode ? '<button class="profile-delete-btn absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-lg text-xs font-bold" data-id="' + p.id + '" aria-label="Delete profile">✕</button>' : '') +
                         '</div>' +
-                        '<span class="font-bold text-sm sm:text-base text-zinc-200 group-hover:text-white">' + p.name + '</span>' +
+                        '<span class="font-bold text-sm sm:text-base text-zinc-300 group-hover:text-white transition-colors">' + p.name + '</span>' +
                     '</div>';
             }).join('');
 
             var addTile = profiles.length < App.MAX_PROFILES
-                ? '<div id="add-profile-tile" class="flex flex-col items-center gap-3 cursor-pointer group">' +
-                    '<div class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-4xl border-4 border-dashed border-white/15 group-hover:border-primary text-white/30 group-hover:text-primary transition-colors duration-300">+</div>' +
-                    '<span class="font-bold text-sm sm:text-base text-zinc-500 group-hover:text-white">Add Profile</span>' +
+                ? '<div id="add-profile-tile" class="flex flex-col items-center gap-3 cursor-pointer group fade-in-scale" style="animation-delay:' + (profiles.length * 60) + 'ms; opacity:0;">' +
+                    '<div class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center text-4xl border-4 border-dashed border-white/15 group-hover:border-primary text-white/30 group-hover:text-primary transition-all duration-300 group-hover:scale-105">+</div>' +
+                    '<span class="font-bold text-sm sm:text-base text-zinc-500 group-hover:text-white transition-colors">Add Profile</span>' +
                 '</div>'
                 : '';
 
             body.innerHTML =
-                '<h1 class="text-3xl sm:text-4xl font-black text-center">' + (manageMode ? 'Manage Profiles' : "Who's Watching?") + '</h1>' +
+                '<h1 class="text-3xl sm:text-4xl font-black text-center fade-in-scale">' + (manageMode ? 'Manage Profiles' : "Who's Watching?") + '</h1>' +
                 '<div class="flex flex-wrap justify-center gap-6 sm:gap-8">' + tilesHtml + addTile + '</div>' +
-                '<button id="manage-toggle-btn" class="text-zinc-400 hover:text-white text-sm font-bold border border-white/15 hover:border-white/40 px-6 py-2.5 rounded-lg transition-colors">' +
+                '<button id="manage-toggle-btn" class="fade-in-scale text-zinc-400 hover:text-white text-sm font-bold border border-white/15 hover:border-white/40 px-6 py-2.5 rounded-lg transition-all hover:scale-105">' +
                     (manageMode ? 'Done' : 'Manage Profiles') +
                 '</button>';
 
@@ -158,20 +160,54 @@
 
         function renderPinPrompt(profile, onSuccess) {
             onSuccess = onSuccess || function () { chooseProfile(profile); };
+            var color = App.avatarColorFor(profile.avatar);
             var body = document.getElementById('profiles-body');
+            var boxesHtml = [0, 1, 2, 3].map(function (i) {
+                return '<input class="pin-box w-14 h-16 sm:w-16 sm:h-20 text-center text-3xl font-black bg-white/10 border-2 border-white/20 rounded-2xl outline-none focus:border-primary transition-colors" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-idx="' + i + '">';
+            }).join('');
             body.innerHTML =
-                '<div class="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl bg-gradient-to-br from-primary/70 to-primary/30">' + profile.avatar + '</div>' +
+                '<div class="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-lg" style="background:linear-gradient(145deg,' + color + 'cc,' + color + '66);">' + profile.avatar + '</div>' +
                 '<h1 class="text-2xl font-black text-center">Enter PIN for ' + profile.name + '</h1>' +
-                '<input id="pin-input" type="password" inputmode="numeric" maxlength="4" autofocus class="w-44 h-16 text-center text-3xl tracking-[0.5em] bg-white/10 border border-white/20 rounded-xl outline-none focus:border-primary">' +
+                '<div id="pin-boxes" class="flex gap-3 sm:gap-4">' + boxesHtml + '</div>' +
                 '<p id="pin-error" class="hidden text-red-400 text-sm font-bold">Incorrect PIN</p>' +
                 '<button id="pin-back-btn" class="text-zinc-400 hover:text-white text-sm font-bold">← Back</button>';
 
-            var input = document.getElementById('pin-input');
-            input.focus();
-            input.addEventListener('input', function () {
-                if (input.value.length !== 4) return;
-                if (input.value === profile.pin) { onSuccess(); }
-                else { document.getElementById('pin-error').classList.remove('hidden'); input.value = ''; }
+            var boxes = Array.prototype.slice.call(document.querySelectorAll('.pin-box'));
+            boxes[0].focus();
+
+            var checkComplete = function () {
+                var pin = boxes.map(function (b) { return b.value; }).join('');
+                if (pin.length !== 4) return;
+                if (pin === profile.pin) {
+                    onSuccess();
+                } else {
+                    var container = document.getElementById('pin-boxes');
+                    container.classList.add('pin-shake');
+                    document.getElementById('pin-error').classList.remove('hidden');
+                    setTimeout(function () {
+                        container.classList.remove('pin-shake');
+                        boxes.forEach(function (b) { b.value = ''; });
+                        boxes[0].focus();
+                    }, 420);
+                }
+            };
+
+            boxes.forEach(function (box, i) {
+                box.addEventListener('input', function () {
+                    box.value = box.value.replace(/[^0-9]/g, '').slice(-1);
+                    if (box.value && i < 3) boxes[i + 1].focus();
+                    checkComplete();
+                });
+                box.addEventListener('keydown', function (e) {
+                    if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
+                });
+                box.addEventListener('paste', function (e) {
+                    e.preventDefault();
+                    var digits = (e.clipboardData.getData('text') || '').replace(/[^0-9]/g, '').split('').slice(0, 4);
+                    digits.forEach(function (d, idx) { if (boxes[idx]) boxes[idx].value = d; });
+                    if (digits.length) boxes[Math.min(digits.length, 4) - 1].focus();
+                    checkComplete();
+                });
             });
             document.getElementById('pin-back-btn').addEventListener('click', renderPicker);
         }
@@ -185,7 +221,7 @@
             var hiddenGenres = existingProfile ? (existingProfile.hiddenGenres || []) : [];
 
             var avatarGrid = App.DEFAULT_AVATARS.map(function (emoji) {
-                return '<button type="button" class="avatar-choice w-14 h-14 rounded-xl flex items-center justify-center text-2xl bg-white/5 border-4 ' + (emoji === selectedAvatar ? 'border-primary' : 'border-transparent') + '" data-emoji="' + emoji + '">' + emoji + '</button>';
+                return '<button type="button" class="avatar-choice w-14 h-14 rounded-xl flex items-center justify-center text-2xl border-4 transition-transform hover:scale-110 ' + (emoji === selectedAvatar ? 'border-white' : 'border-transparent') + '" style="background:linear-gradient(145deg,' + App.avatarColorFor(emoji) + 'cc,' + App.avatarColorFor(emoji) + '66);" data-emoji="' + emoji + '">' + emoji + '</button>';
             }).join('');
 
             var genreChecks = App.HIDABLE_GENRES.map(function (g) {
@@ -223,8 +259,8 @@
 
             document.querySelectorAll('.avatar-choice').forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    document.querySelectorAll('.avatar-choice').forEach(function (b) { b.classList.remove('border-primary'); b.classList.add('border-transparent'); });
-                    btn.classList.remove('border-transparent'); btn.classList.add('border-primary');
+                    document.querySelectorAll('.avatar-choice').forEach(function (b) { b.classList.remove('border-white'); b.classList.add('border-transparent'); });
+                    btn.classList.remove('border-transparent'); btn.classList.add('border-white');
                     selectedAvatar = btn.getAttribute('data-emoji');
                 });
             });

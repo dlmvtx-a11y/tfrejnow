@@ -148,9 +148,10 @@ App.showHero = function (i) {
     document.getElementById('hero-title').innerText = item.title || item.name || '';
     document.getElementById('hero-desc').innerText = item.overview || '';
     heroImg.classList.add('opacity-0');
-    var src = item.backdrop_path ? (App.BACKDROP_BASE + item.backdrop_path) : '';
+    var src = item.backdrop_path ? (App.BACKDROP_BASE + item.backdrop_path) : (item.poster_path ? (App.IMG_BASE_URL + item.poster_path) : App.NO_POSTER);
     setTimeout(function () {
         heroImg.onload = function () { document.getElementById('hero-loader').classList.add('hidden'); heroImg.classList.remove('opacity-0'); };
+        heroImg.onerror = function () { heroImg.onerror = null; heroImg.src = App.NO_POSTER; };
         heroImg.src = src;
     }, 150);
     App.updateHeroDotsActive();
