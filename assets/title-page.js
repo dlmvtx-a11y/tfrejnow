@@ -231,6 +231,7 @@ App.startWatching = function () {
 
     App.renderServerTabs();
     App.changeServer();
+    App.updatePresence(App.currentItemData, App.currentMediaType);
     setTimeout(function () {
         var vc = document.getElementById('video-container');
         if (vc) vc.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -265,10 +266,10 @@ App._wireVideasyProgressSync = function () {
             var advanced = data.season !== App.currentSeason || data.episode !== App.currentEpisode;
             App.currentSeason = data.season;
             App.currentEpisode = data.episode;
-            App.saveProgress(App.currentItemData, 'tv', data.season, data.episode);
+            App.saveProgress(App.currentItemData, 'tv', data.season, data.episode, typeof data.progress === 'number' ? data.progress : undefined);
             if (advanced && App.updateSeasonTabsVisual) App.updateSeasonTabsVisual();
         } else if (App.currentMediaType === 'movie') {
-            App.saveProgress(App.currentItemData, 'movie', null, null);
+            App.saveProgress(App.currentItemData, 'movie', null, null, typeof data.progress === 'number' ? data.progress : undefined);
         }
     });
 };

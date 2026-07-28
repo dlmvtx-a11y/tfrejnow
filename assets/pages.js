@@ -25,8 +25,12 @@ App.initHomePage = function () {
             })
             .catch(function () { document.getElementById('trending-results').innerHTML = App.retryHtml('trending-results', 'App.initHomePage'); });
 
+        App.fetchRecommendedForMeRow();
+    App.loadPresence();
+
         if ('IntersectionObserver' in window) {
             var targets = [
+                { id: 'top10-movies-section', fn: App.fetchTopTenRows },
                 { id: 'newweek-section', fn: App.fetchNewThisWeekRow },
                 { id: 'movies-section', fn: App.fetchMoviesRow },
                 { id: 'tv-section', fn: App.fetchTvRow },
@@ -42,7 +46,7 @@ App.initHomePage = function () {
             }, { rootMargin: '400px' });
             targets.forEach(function (t) { var el = document.getElementById(t.id); if (el) observer.observe(el); });
         } else {
-            App.fetchNewThisWeekRow(); App.fetchMoviesRow(); App.fetchTvRow(); App.fetchAnimeRow();
+            App.fetchTopTenRows(); App.fetchNewThisWeekRow(); App.fetchMoviesRow(); App.fetchTvRow(); App.fetchAnimeRow();
         }
     });
 
@@ -102,10 +106,30 @@ App.renderListRows = function () {
         if (App.userData.watchlist.length) { wl.classList.remove('hidden'); App.renderCards(App.userData.watchlist, 'watchlist-results', null, true, false, 'watchlist'); }
         else wl.classList.add('hidden');
     }
-    App.fetchRecommendedForMeRow();
-    App.fetchTopTenRows();
 };
 App._onListsChanged = function () { App.renderListRows(); };
+
+App.loadPresence = function () {
+    var section = document.getElementById('presence-section');
+    if (!section || !App._db || !App.Auth.currentUser) return;
+    var tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+    App._db.collection('presence').where('updatedAt', '>', tenMinAgo).get()
+        .then(function (snap) {
+            var others = snap.docs
+                .map(function (d) { return Object.assign({ uid: d.id }, d.data()); })
+                .filter(function (p) { return p.uid !== App.Auth.currentUser.uid; });
+            if (!others.length) { section.classList.add('hidden'); return; }
+            section.classList.remove('hidden');
+            document.getElementById('presence-results').innerHTML = others.map(function (p) {
+                var poster = p.posterPath ? (App.IMG_BASE_URL + p.posterPath) : App.NO_POSTER;
+                return '<a href="title.html?type=' + p.mediaType + '&id=' + p.itemId + '" class="flex-shrink-0 flex items-center gap-3 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-2.5 pr-4 hover:border-primary/60 transition-colors">' +
+                    '<img src="' + poster + '" onerror="this.onerror=null;this.src=\'' + App.NO_POSTER + '\';" class="w-10 h-14 object-cover rounded-lg flex-shrink-0 bg-zinc-200 dark:bg-zinc-800">' +
+                    '<div class="min-w-0"><p class="text-xs font-bold text-primary truncate">' + p.username + '</p><p class="text-sm font-bold text-black dark:text-white truncate max-w-[160px]">' + p.title + '</p></div>' +
+                '</a>';
+            }).join('');
+        })
+        .catch(function (e) { console.error('loadPresence failed - often a missing Firestore rule:', e); section.classList.add('hidden'); });
+};
 
 App.fetchTopTenRows = function () {
     App.fetchJSON(App.BASE_URL + '/trending/movie/day?api_key=' + App.API_KEY)

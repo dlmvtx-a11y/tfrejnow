@@ -102,6 +102,7 @@ App._loadAdminOverview = function () {
         App._renderTrendChart('watch-events-chart', logs, function (l) { return l.ts; }, 'Watch events');
         App._renderMostWatched(logs);
         App._renderTopSearches(searches);
+        App._renderActiveLeaderboard(users, logs);
         App._renderRecentActivity(logs);
         App._renderServerReports(reports);
     });
@@ -174,6 +175,24 @@ App._renderServerReports = function (reports) {
             '<div class="min-w-0"><p class="text-sm font-bold text-black dark:text-white truncate">' + r.title + ep + ' <span class="text-primary font-normal">· ' + r.server + '</span></p>' +
             '<p class="text-xs text-zinc-500 truncate">' + r.email + '</p></div>' +
             '<span class="text-xs text-zinc-500 flex-shrink-0 ml-3">' + fmtDateTime(r.ts) + '</span>' +
+        '</div>';
+    }).join('');
+};
+
+App._renderActiveLeaderboard = function (users, logs) {
+    var watchCounts = {};
+    logs.forEach(function (l) { watchCounts[l.uid] = (watchCounts[l.uid] || 0) + 1; });
+    var ranked = users.map(function (u) {
+        return { id: u.id, name: u.username || u.email, watches: watchCounts[u.id] || 0 };
+    }).filter(function (u) { return u.watches > 0; }).sort(function (a, b) { return b.watches - a.watches; }).slice(0, 10);
+
+    var el = document.getElementById('active-leaderboard-list');
+    if (!el) return;
+    if (!ranked.length) { el.innerHTML = '<p class="text-zinc-500 text-sm py-4">No activity yet.</p>'; return; }
+    el.innerHTML = ranked.map(function (u, i) {
+        return '<div class="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors">' +
+            '<span class="flex items-center gap-3 min-w-0"><span class="text-xs font-black text-primary w-5 flex-shrink-0">#' + (i + 1) + '</span><span class="text-sm font-bold text-black dark:text-white truncate">' + u.name + '</span></span>' +
+            '<span class="text-xs font-bold text-zinc-500 flex-shrink-0">' + u.watches + ' watches</span>' +
         '</div>';
     }).join('');
 };
@@ -310,6 +329,33 @@ App._wireBulkSelection = function () {
             .catch(function (e) { console.error(e); App.showToast('Some unbans may have failed - check console.'); })
             .finally(function () { unbanBtn.disabled = false; });
     });
+};
+
+App.exportUsersCsv = function () {
+    var users = App._allUsers || [];
+    if (!users.length) { App.showToast('No users to export.'); return; }
+
+    var esc = function (val) {
+        var s = String(val === undefined || val === null ? '' : val);
+        return '"' + s.replace(/"/g, '""') + '"';
+    };
+    var rows = [['Email', 'Username', 'Joined', 'Last Active', 'Status', 'Profiles', 'Watchlist Items', 'In Progress']];
+    users.forEach(function (u) {
+        var pd = u.profileData || {};
+        var wl = Object.keys(pd).reduce(function (sum, pid) { return sum + ((pd[pid].watchlist || []).length); }, 0);
+        var prog = Object.keys(pd).reduce(function (sum, pid) { return sum + Object.keys(pd[pid].progress || {}).length; }, 0);
+        var status = u.approved === false ? 'Pending' : (App.isCurrentlyBanned(u) ? 'Banned' : 'Active');
+        rows.push([u.email || '', u.username || '', fmtDate(u.createdAt), fmtDateTime(u.lastActiveAt), status, (u.profiles || []).length, wl, prog]);
+    });
+
+    var csv = rows.map(function (row) { return row.map(esc).join(','); }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'tfrejnow-users-' + new Date().toISOString().substring(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 App._loadAdminUsers = function () {

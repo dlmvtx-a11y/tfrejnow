@@ -684,10 +684,27 @@ App.markAllNotificationsRead = function () {
 App.checkForNewEpisodes = function () {
     if (sessionStorage.getItem('tfrej_notif_checked')) return;
     sessionStorage.setItem('tfrej_notif_checked', '1');
-    var tvShows = Object.keys(App.userData.progress || {})
-        .map(function (id) { return App.userData.progress[id]; })
-        .filter(function (p) { return p.media_type === 'tv'; });
-    tvShows.forEach(function (p) {
+
+    // Continue Watching + Watchlist TV shows - check for new episodes
+    var progressShows = Object.keys(App.userData.progress || {}).map(function (id) { return App.userData.progress[id]; }).filter(function (p) { return p.media_type === 'tv'; });
+    var watchlistShows = (App.userData.watchlist || []).filter(function (w) { return (w.media_type || w.mediaType) === 'tv'; });
+    var seenTvIds = {};
+    progressShows.forEach(function (p) { seenTvIds[p.id] = true; });
+    watchlistShows.forEach(function (w) {
+        if (seenTvIds[w.id]) return; // already covered via progress check
+        seenTvIds[w.id] = true;
+        App.fetchJSON(App.BASE_URL + '/tv/' + w.id + '?api_key=' + App.API_KEY).then(function (data) {
+            var last = data.last_episode_to_air;
+            if (!last) return;
+            App.addNotification({
+                itemId: w.id, mediaType: 'tv', title: data.name || w.title, posterPath: data.poster_path,
+                message: 'New episode out: Season ' + last.season_number + ', Episode ' + last.episode_number
+            });
+        }).catch(function () {});
+    });
+    Object.keys(seenTvIds).forEach(function (id) {
+        var p = progressShows.filter(function (x) { return String(x.id) === String(id); })[0];
+        if (!p) return;
         App.fetchJSON(App.BASE_URL + '/tv/' + p.id + '?api_key=' + App.API_KEY).then(function (data) {
             var last = data.last_episode_to_air;
             if (!last) return;
@@ -699,6 +716,44 @@ App.checkForNewEpisodes = function () {
                 });
             }
         }).catch(function () {});
+    });
+
+    // Watchlist movies - notify once they've actually been released
+    var watchlistMovies = (App.userData.watchlist || []).filter(function (w) { return (w.media_type || w.mediaType) === 'movie'; });
+    watchlistMovies.forEach(function (w) {
+        App.fetchJSON(App.BASE_URL + '/movie/' + w.id + '?api_key=' + App.API_KEY).then(function (data) {
+            if (!data.release_date) return;
+            var releaseDate = new Date(data.release_date + 'T00:00:00');
+            if (releaseDate <= new Date()) {
+                App.addNotification({
+                    itemId: w.id, mediaType: 'movie', title: data.title || w.title, posterPath: data.poster_path,
+                    message: 'Now available to watch'
+                });
+            }
+        }).catch(function () {});
+    });
+
+    App._checkComeBackNudge();
+};
+
+/* Gentle "pick up where you left off" nudge if it's been a few days since any
+   activity and something is genuinely still in progress. Once per calendar
+   day at most, so it never feels spammy. */
+App._checkComeBackNudge = function () {
+    var progress = App.userData.progress || {};
+    var entries = Object.keys(progress).map(function (id) { return progress[id]; }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    if (!entries.length) return;
+    var mostRecent = entries[0];
+    var daysSince = (Date.now() - (mostRecent.ts || 0)) / (1000 * 60 * 60 * 24);
+    if (daysSince < 3) return;
+
+    var todayKey = 'tfrej_comeback_nudge_' + new Date().toISOString().substring(0, 10);
+    if (localStorage.getItem(todayKey)) return;
+    localStorage.setItem(todayKey, '1');
+
+    App.addNotification({
+        itemId: mostRecent.id, mediaType: mostRecent.media_type, title: mostRecent.title, posterPath: mostRecent.poster_path,
+        message: 'Pick up where you left off'
     });
 };
 
@@ -769,6 +824,20 @@ App._wireNotificationBell = function () {
     document.addEventListener('click', function (e) {
         if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) panel.classList.add('hidden');
     });
+};
+
+/* ---------- "CURRENTLY WATCHING" PRESENCE (lightweight, no backend needed) ---------- */
+App.updatePresence = function (item, mediaType) {
+    if (!App.Auth.currentUser || !App._db) return;
+    var name = (App.userData && App.userData.username) ? App.userData.username : App.Auth.currentUser.email;
+    App._db.collection('presence').doc(App.Auth.currentUser.uid).set({
+        username: name,
+        title: item.title || item.name || '',
+        posterPath: item.poster_path || null,
+        mediaType: mediaType,
+        itemId: item.id,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function (e) { console.error('updatePresence failed', e); });
 };
 
 App.getActiveProfile = function () {
@@ -901,12 +970,15 @@ App.removeFromWatchlist = function (id) {
     }
     if (typeof App._onListsChanged === 'function') App._onListsChanged();
 };
-App.saveProgress = function (item, mediaType, season, episode) {
+App.saveProgress = function (item, mediaType, season, episode, progressPercent) {
     if (!App.requireAuth()) return;
+    var existing = App.userData.progress[item.id] || {};
     App.userData.progress[item.id] = {
         id: item.id, title: item.name || item.title, poster_path: item.poster_path,
         media_type: mediaType, season: season || null, episode: episode || null,
-        genreIds: (item.genres || []).map(function (g) { return g.id; }), ts: Date.now()
+        genreIds: (item.genres || []).map(function (g) { return g.id; }),
+        progressPercent: (typeof progressPercent === 'number') ? progressPercent : existing.progressPercent,
+        ts: Date.now()
     };
     App.saveUserData();
 };
@@ -1287,12 +1359,24 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
             : 'title.html?type=' + mediaType + '&id=' + item.id;
 
         var progressTag = '';
+        var progressBarHtml = '';
         if (mediaType === 'tv' && App.userData.progress[item.id]) {
             var prog = App.userData.progress[item.id];
             if (prog.season > 1 || prog.episode > 1) {
                 progressTag = '<div class="absolute top-2 left-2 z-10 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg">S' + prog.season + ':E' + prog.episode + '</div>';
             }
         }
+        if (removeType === 'continue' && App.userData.progress[item.id] && App.userData.progress[item.id].progressPercent) {
+            var pct = Math.max(2, Math.min(100, App.userData.progress[item.id].progressPercent));
+            progressBarHtml = '<div class="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-10"><div class="h-full bg-primary" style="width:' + pct + '%"></div></div>';
+        }
+
+        var overview = (item.overview || '').trim();
+        var hoverOverviewHtml = overview
+            ? '<div class="hidden md:flex absolute inset-0 bg-black/85 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 items-center pointer-events-none">' +
+                '<p class="text-white text-[11px] leading-relaxed line-clamp-[8]">' + overview.replace(/</g, '&lt;') + '</p>' +
+              '</div>'
+            : '';
 
         var removeBtn = '';
         if (removeType) {
@@ -1308,10 +1392,12 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
                     '<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/25">' +
                         '<div class="bg-primary text-white rounded-full p-3.5 shadow-lg shadow-primary/50"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' +
                     '</div>' +
+                    hoverOverviewHtml +
                     '<div class="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/95 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2 text-white text-[11px] font-bold">' +
                         (rating ? '<span class="flex items-center gap-0.5 text-yellow-400">★ ' + rating + '</span>' : '') +
                         (year ? '<span>' + year + '</span>' : '') +
                     '</div>' +
+                    progressBarHtml +
                 '</div>' +
                 '<div class="p-3"><h3 class="text-black dark:text-white text-sm md:text-base font-bold truncate">' + title + '</h3><p class="text-[10px] font-bold text-zinc-500 uppercase mt-1 tracking-wider">' + mediaType + '</p></div>' +
             '</a>';
