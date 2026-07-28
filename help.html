@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Help & Guide - TfrejNOW</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236d28d9'/><text y='68' x='50' font-size='60' text-anchor='middle' fill='white'>🍿</text></svg>">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="theme-color" content="#6d28d9">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icons/icon-apple-touch.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/style.css?v=61">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="assets/firebase-config.js?v=61"></script>
+    <script src="assets/app.js?v=61"></script>
+</head>
+<body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
+    <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
+        <div class="loading-logo-pulse text-3xl sm:text-4xl font-black tracking-tighter"><span class="text-white">Tfrej</span><span class="text-primary">NOW</span></div>
+        <div class="w-7 h-7 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-zinc-500 text-xs font-bold tracking-wide">Checking your session...</span>
+    </div>
+    <div class="fixed inset-0 bg-gradient-to-b from-lightbg/90 via-lightbg to-lightbg dark:from-black/80 dark:via-background/90 dark:to-background pointer-events-none"></div>
+    <div id="nav-root"></div>
+
+    <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-3xl px-4 sm:px-6 md:px-10 w-full flex-1">
+        <h1 class="text-2xl md:text-4xl font-black text-black dark:text-white mb-2 border-l-4 border-primary pl-4">Help & Guide</h1>
+        <p class="text-sm text-zinc-500 mb-10 pl-4">Everything to get the smoothest experience on TfrejNOW.</p>
+
+        <!-- Nav -->
+        <div class="flex flex-wrap gap-2 mb-10">
+            <a href="#ads" class="text-xs font-bold bg-black/5 dark:bg-white/10 hover:bg-primary hover:text-white px-3 py-2 rounded-lg transition-colors">Blocking Ads</a>
+            <a href="#servers" class="text-xs font-bold bg-black/5 dark:bg-white/10 hover:bg-primary hover:text-white px-3 py-2 rounded-lg transition-colors">Servers</a>
+            <a href="#profiles" class="text-xs font-bold bg-black/5 dark:bg-white/10 hover:bg-primary hover:text-white px-3 py-2 rounded-lg transition-colors">Profiles</a>
+            <a href="#together" class="text-xs font-bold bg-black/5 dark:bg-white/10 hover:bg-primary hover:text-white px-3 py-2 rounded-lg transition-colors">Watch Together</a>
+            <a href="#other" class="text-xs font-bold bg-black/5 dark:bg-white/10 hover:bg-primary hover:text-white px-3 py-2 rounded-lg transition-colors">Everything Else</a>
+        </div>
+
+        <div class="flex flex-col gap-14">
+
+            <!-- ADS -->
+            <div id="ads">
+                <h2 class="text-xl md:text-2xl font-black mb-2">🚫 Blocking Ads (the single biggest comfort upgrade)</h2>
+                <p class="text-sm text-zinc-500 mb-6">The video servers are free third-party embeds, and some of them run ads or popups to pay for themselves - that's outside this site's control. The fix isn't on our end, it's a browser extension on yours. Takes 2 minutes, works for the rest of your browsing too.</p>
+
+                <h3 class="font-bold text-black dark:text-white mb-2">💻 On a computer</h3>
+                <ul class="flex flex-col gap-3 mb-6">
+                    <li class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">Best option: switch to <a href="https://www.mozilla.org/firefox/" target="_blank" rel="noopener" class="text-primary hover:underline">Firefox</a> and install <a href="https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/" target="_blank" rel="noopener" class="text-primary hover:underline">uBlock Origin</a></p>
+                        <p class="text-xs text-zinc-500 mt-1">Free, open-source, and the strongest ad/popup blocker available - Chrome restricted what extensions are allowed to do a while back, so Firefox is genuinely the more powerful option now, not just a preference.</p>
+                    </li>
+                    <li class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">Staying on Chrome or Edge?</p>
+                        <p class="text-xs text-zinc-500 mt-1">Install <strong>uBlock Origin Lite</strong> from the Chrome Web Store (switch its mode to "Complete" in the extension's settings after installing), or <strong>AdGuard</strong>. Both still block most ads and popups, just not quite as thoroughly as the Firefox version.</p>
+                    </li>
+                    <li class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">Prefer not to install anything?</p>
+                        <p class="text-xs text-zinc-500 mt-1">The <a href="https://brave.com/" target="_blank" rel="noopener" class="text-primary hover:underline">Brave browser</a> blocks ads and popups by default with zero setup.</p>
+                    </li>
+                </ul>
+
+                <h3 class="font-bold text-black dark:text-white mb-2">📱 On mobile</h3>
+                <ul class="flex flex-col gap-3 mb-6">
+                    <li class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">Android</p>
+                        <p class="text-xs text-zinc-500 mt-1">Install Firefox for Android, then add uBlock Origin from within it - same full-strength blocking as desktop. Alternatively, the <strong>AdGuard</strong> app blocks ads system-wide (in-browser and inside other apps too), with a free tier.</p>
+                    </li>
+                    <li class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">iPhone / iPad</p>
+                        <p class="text-xs text-zinc-500 mt-1">Apple limits what browser extensions can do on iOS. Install <strong>AdGuard for Safari</strong> from the App Store as a Safari content blocker, or set up a private DNS filter (see below) for broader coverage.</p>
+                    </li>
+                </ul>
+
+                <h3 class="font-bold text-black dark:text-white mb-2">🌐 One setting that covers every device on your WiFi</h3>
+                <p class="text-xs text-zinc-500">Set your phone, computer, or router's DNS to a free filtering service like <strong>NextDNS</strong> or <strong>AdGuard DNS</strong>. This blocks known ad/tracker domains network-wide - including apps and smart TVs - without installing anything per-device. Takes about 5 minutes to set up once.</p>
+            </div>
+
+            <!-- SERVERS -->
+            <div id="servers">
+                <h2 class="text-xl md:text-2xl font-black mb-2">🎬 Servers</h2>
+                <p class="text-sm text-zinc-500">Every title has 5 servers to choose from, shown as tabs above the player. If one doesn't load, is slow, or looks wrong, just tap a different one - they're independent, so this is completely normal and happens with every free streaming source. Server 1 also supports auto-next-episode and remembers your exact spot more accurately than the others.</p>
+                <p class="text-sm text-zinc-500 mt-2">Found a server that's consistently broken for a specific title? Tap <strong>⚠️ Report Broken</strong> next to the server list to let the admin know.</p>
+            </div>
+
+            <!-- PROFILES -->
+            <div id="profiles">
+                <h2 class="text-xl md:text-2xl font-black mb-2">👤 Profiles</h2>
+                <p class="text-sm text-zinc-500 mb-2">Up to 5 profiles per account, each with their own watchlist, continue watching, and history - completely separate from each other, like Netflix.</p>
+                <ul class="text-sm text-zinc-500 flex flex-col gap-1.5 list-disc pl-5">
+                    <li><strong class="text-black dark:text-white">PIN</strong> - optional, protects a specific profile from being opened by someone else on the account.</li>
+                    <li><strong class="text-black dark:text-white">Kids mode</strong> - restricts that profile to family-friendly titles only.</li>
+                    <li><strong class="text-black dark:text-white">Hide Genres</strong> - available on any profile, not just Kids - hide entire genres you're not interested in seeing.</li>
+                    <li>Switch profiles any time from the account menu (top right) without signing out.</li>
+                </ul>
+            </div>
+
+            <!-- WATCH TOGETHER -->
+            <div id="together">
+                <h2 class="text-xl md:text-2xl font-black mb-2">🎉 Watch Together</h2>
+                <p class="text-sm text-zinc-500 mb-4">Start a private watch party from any title page and share the link - friends can join with just a name, no account needed.</p>
+
+                <div class="flex flex-col gap-3">
+                    <div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">🔗 Watch Room</p>
+                        <p class="text-xs text-zinc-500 mt-1">Everyone plays the video independently on their own device from the same starting point. Most reliable option - use this if you just want to hang out and chat while watching roughly together.</p>
+                    </div>
+                    <div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">📡 Live Stream (genuinely synced)</p>
+                        <p class="text-xs text-zinc-500 mt-1">The host shares their screen live, and everyone watches that exact feed in real time - true frame-by-frame sync. When starting the share, be sure to pick <strong>"This Tab"</strong> specifically (not "Entire Screen"), and confirm it's showing the right tab if you have multiple open. Quality depends on the host's upload speed, and the host needs to keep that tab open for the whole watch.</p>
+                    </div>
+                    <div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">🎤 Voice Chat</p>
+                        <p class="text-xs text-zinc-500 mt-1">Tap "Join Voice" in either mode to talk live with everyone in the party. Mute anytime with the button that appears next to it.</p>
+                    </div>
+                    <div class="bg-black/5 dark:bg-white/5 rounded-xl p-4">
+                        <p class="font-bold text-sm">Host controls</p>
+                        <p class="text-xs text-zinc-500 mt-1">As host, you pick the server/episode for everyone, and can remove anyone from the party (tap the "watching" count to see who's in, with a Kick option next to each name).</p>
+                    </div>
+                </div>
+
+                <p class="text-xs text-zinc-500 mt-4">⚠️ If a connection won't complete (stuck on "waiting" or "connecting"), the most common cause is an ad-blocker or privacy extension blocking WebRTC on that device - the page will tell you if this looks like what's happening. Temporarily disabling it for this site usually fixes it.</p>
+            </div>
+
+            <!-- EVERYTHING ELSE -->
+            <div id="other">
+                <h2 class="text-xl md:text-2xl font-black mb-2">📌 Everything Else</h2>
+                <ul class="text-sm text-zinc-500 flex flex-col gap-2.5 list-disc pl-5">
+                    <li><strong class="text-black dark:text-white">🔔 Notifications</strong> - the bell icon tells you when a show in your Continue Watching or Watchlist has a new episode, or when a Watchlist movie is finally out.</li>
+                    <li><strong class="text-black dark:text-white">👍 Like / Dislike</strong> - on any title page. Liking things (and what you actually watch) shapes your "Recommended For You" row on the homepage.</li>
+                    <li><strong class="text-black dark:text-white">Search & Filters</strong> - each section (Movies, TV, Anime) has its own search and genre filters, scoped to just that type.</li>
+                    <li><strong class="text-black dark:text-white">📱 Install as an app</strong> - on mobile, use your browser's "Add to Home Screen" option for a faster, full-screen experience without opening a browser each time.</li>
+                    <li><strong class="text-black dark:text-white">📊 My Stats</strong> - see your total watched, top genre, and more from your Profile page.</li>
+                    <li><strong class="text-black dark:text-white">📋 Updates</strong> - what's changed on the site recently, from the account menu.</li>
+                </ul>
+            </div>
+
+        </div>
+    </section>
+
+    <div id="footer-root"></div>
+
+    <script>
+        App.initFirebase();
+        App.gateSiteAccess();
+    </script>
+</body>
+</html>

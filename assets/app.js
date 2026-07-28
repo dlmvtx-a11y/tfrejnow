@@ -1228,6 +1228,7 @@ App.renderAuthNav = function () {
             '<a href="profiles.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">🔀 Manage Profiles</a>' +
             '<a href="profile.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">⚙️ Account Settings</a>' +
             '<a href="changelog.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">📋 Updates</a>' +
+            '<a href="help.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">❓ Help & Guide</a>' +
             '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' +
             '<button onclick="App.signOutUser()" class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-lg text-left">🚪 Sign Out</button>';
 
@@ -1253,6 +1254,7 @@ App.renderAuthNav = function () {
                 '<a href="profiles.html" class="block px-6 py-3 text-xs font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10">🔀 Manage Profiles</a>' +
                 '<a href="profile.html" class="block px-6 py-3 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10">⚙️ Account Settings</a>' +
                 '<a href="changelog.html" class="block px-6 py-3 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10">📋 Updates</a>' +
+                '<a href="help.html" class="block px-6 py-3 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10">❓ Help & Guide</a>' +
                 '<button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10 border-t border-black/5 dark:border-white/5">🚪 Sign Out</button>';
         }
 
