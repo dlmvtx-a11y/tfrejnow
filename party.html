@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=47">
+    <link rel="stylesheet" href="assets/style.css?v=48">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=47"></script>
-    <script src="assets/app.js?v=47"></script>
+    <script src="assets/firebase-config.js?v=48"></script>
+    <script src="assets/app.js?v=48"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -414,9 +414,38 @@
                 updateShareStatus();
             };
 
+            var processedViewerCandidates = 0;
+            var iceCandidatesSent = 0;
+            var iceCandidatesReceived = 0;
             pc.onicecandidate = function (e) {
-                if (e.candidate) peerDocRef.update({ hostCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) }).catch(function(){});
+                if (e.candidate) {
+                    iceCandidatesSent++;
+                    updateStep('answer received, sent ' + iceCandidatesSent + ' ICE candidates...');
+                    peerDocRef.update({ hostCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) })
+                        .catch(function (e2) { console.error('Host: failed to send ICE candidate', e2); });
+                } else {
+                    console.log('Host: ICE gathering complete for', viewerUid, '- total candidates sent:', iceCandidatesSent);
+                }
             };
+            peerDocRef.onSnapshot(function (doc) {
+                var d = doc.data();
+                if (!d) return;
+                if (d.answer && !pc.currentRemoteDescription) {
+                    pc.setRemoteDescription(new RTCSessionDescription(d.answer)).then(function () {
+                        console.log('Host: remote description (answer) set for', viewerUid);
+                        updateStep('answer received, connecting...');
+                    }).catch(function (e2) { console.error('Host: setRemoteDescription FAILED', e2); updateStep('FAILED to process answer: ' + e2.message); });
+                }
+                var vCands = d.viewerCandidates || [];
+                for (var i = processedViewerCandidates; i < vCands.length; i++) {
+                    (function (candStr) {
+                        pc.addIceCandidate(new RTCIceCandidate(JSON.parse(candStr))).then(function () {
+                            iceCandidatesReceived++;
+                        }).catch(function (e2) { console.error('Host: addIceCandidate FAILED', e2); });
+                    })(vCands[i]);
+                }
+                processedViewerCandidates = vCands.length;
+            });
 
             var updateStep = function (label) {
                 stepStatus[viewerUid] = label;
@@ -438,20 +467,6 @@
             }).catch(function (e) {
                 console.error('Host: offer setup FAILED for', viewerUid, '- real error:', e);
                 updateStep('FAILED: ' + (e && e.message ? e.message : 'unknown error'));
-            });
-
-            var processedViewerCandidates = 0;
-            peerDocRef.onSnapshot(function (doc) {
-                var d = doc.data();
-                if (!d) return;
-                if (d.answer && !pc.currentRemoteDescription) {
-                    pc.setRemoteDescription(new RTCSessionDescription(d.answer)).catch(function (e) { console.error('setRemoteDescription (host) failed', e); });
-                }
-                var vCands = d.viewerCandidates || [];
-                for (var i = processedViewerCandidates; i < vCands.length; i++) {
-                    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(vCands[i]))).catch(function () {});
-                }
-                processedViewerCandidates = vCands.length;
             });
         }
 
@@ -485,7 +500,12 @@
                 });
             };
             pc.onicecandidate = function (e) {
-                if (e.candidate) peerDocRef.update({ viewerCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) }).catch(function(){});
+                if (e.candidate) {
+                    peerDocRef.update({ viewerCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) })
+                        .catch(function (e2) { console.error('Viewer: failed to send ICE candidate', e2); });
+                } else {
+                    console.log('Viewer: ICE gathering complete');
+                }
             };
 
             var processedHostCandidates = 0;
@@ -496,16 +516,22 @@
                 if (d.offer && !answered) {
                     answered = true;
                     pc.setRemoteDescription(new RTCSessionDescription(d.offer)).then(function () {
+                        console.log('Viewer: remote description (offer) set');
                         return pc.createAnswer();
                     }).then(function (answer) {
                         return pc.setLocalDescription(answer);
                     }).then(function () {
+                        console.log('Viewer: answer created and set locally, sending to host');
                         return peerDocRef.update({ answer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
-                    }).catch(function (e) { console.error('viewer answer flow failed', e); });
+                    }).then(function () {
+                        console.log('Viewer: answer sent to host successfully');
+                    }).catch(function (e) { console.error('Viewer: answer flow FAILED - real error:', e); });
                 }
                 var hCands = d.hostCandidates || [];
                 for (var i = processedHostCandidates; i < hCands.length; i++) {
-                    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(hCands[i]))).catch(function () {});
+                    (function (candStr) {
+                        pc.addIceCandidate(new RTCIceCandidate(JSON.parse(candStr))).catch(function (e2) { console.error('Viewer: addIceCandidate FAILED', e2); });
+                    })(hCands[i]);
                 }
                 processedHostCandidates = hCands.length;
             });
