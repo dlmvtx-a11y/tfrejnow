@@ -3,6 +3,15 @@
 window.CHANGELOG_ENTRIES = [
     {
         date: '2026-07-28',
+        title: 'Watch Together, and a real playback bug fixed',
+        items: [
+            'New: Watch Together - start a private watch party and share a link, no sign-up needed for friends to join',
+            'Live chat and quick reactions inside each watch party',
+            'Fixed a real bug where resuming Continue Watching, or starting playback on a fresh title, could silently fail with no video and no server options showing'
+        ]
+    },
+    {
+        date: '2026-07-28',
         title: 'Server lineup refresh & smoother playback',
         items: [
             'Reordered servers and added two new ones (5 total) for better reliability',

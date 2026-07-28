@@ -827,6 +827,31 @@ App._wireNotificationBell = function () {
 };
 
 /* ---------- "CURRENTLY WATCHING" PRESENCE (lightweight, no backend needed) ---------- */
+/* ---------- WATCH TOGETHER ---------- */
+App.createWatchParty = function () {
+    if (!App.requireAuth() || !App.currentItemData) return;
+    var roomId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var hostName = (App.userData && App.userData.username) ? App.userData.username : App.Auth.currentUser.email;
+    App._db.collection('watchParties').doc(roomId).set({
+        hostUid: App.Auth.currentUser.uid,
+        hostName: hostName,
+        itemId: App.currentItemData.id,
+        mediaType: App.currentMediaType,
+        title: App.currentItemData.title || App.currentItemData.name || '',
+        posterPath: App.currentItemData.poster_path || null,
+        season: App.currentMediaType === 'tv' ? (App.currentSeason || 1) : null,
+        episode: App.currentMediaType === 'tv' ? (App.currentEpisode || 1) : null,
+        serverKey: App.currentServerKey || 'server1',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function () {
+        location.href = App._siteBaseUrl() + 'party.html?room=' + roomId + '&host=1';
+    }).catch(function (e) {
+        console.error('createWatchParty failed', e);
+        App.showToast('Failed to create the watch party. Check the console for details.');
+    });
+};
+
 App.updatePresence = function (item, mediaType) {
     if (!App.Auth.currentUser || !App._db) return;
     var name = (App.userData && App.userData.username) ? App.userData.username : App.Auth.currentUser.email;
