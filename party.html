@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=52">
+    <link rel="stylesheet" href="assets/style.css?v=53">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=52"></script>
-    <script src="assets/app.js?v=52"></script>
+    <script src="assets/firebase-config.js?v=53"></script>
+    <script src="assets/app.js?v=53"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -73,7 +73,7 @@
                         <iframe id="host-vod-frame" class="w-full h-full absolute inset-0 bg-black" src="" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
                     </div>
                     <div id="stream-host-idle" class="flex-shrink-0 flex flex-col items-center gap-2 p-3 bg-black/80 text-center">
-                        <p class="text-zinc-400 text-xs max-w-sm">Once the video above is playing, click below and choose <strong class="text-white">"This Tab"</strong> (with audio) to broadcast it live.</p>
+                        <p class="text-zinc-400 text-xs max-w-sm">Once the video above is playing, click below. <strong class="text-white">In the picker that appears, choose the "This Tab" option specifically</strong> (not "Entire Screen" or "Window") and make sure it's showing <em>this exact tab</em> - not a different tab you might have open, like an invite link you opened to test.</p>
                         <button id="start-share-btn" class="bg-primary hover:bg-primary/80 px-6 py-2.5 rounded-xl font-bold text-sm">📡 Start Sharing This Tab</button>
                     </div>
                     <div id="stream-host-active" class="hidden flex-shrink-0 items-center justify-center gap-2 p-2 bg-black/80">
@@ -85,6 +85,7 @@
                 <div id="stream-waiting" class="hidden flex-col items-center gap-3 p-6 text-center">
                     <div class="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
                     <p class="text-zinc-400 text-sm">Waiting for the host to start sharing...</p>
+                    <p id="viewer-debug-status" class="text-[10px] text-zinc-600"></p>
                 </div>
             </div>
         </div>
@@ -497,7 +498,20 @@
 
             var pc = new RTCPeerConnection(ICE_CONFIG);
             viewerPeerConnection = pc;
-            pc.onconnectionstatechange = function () { console.log('Viewer connection state:', pc.connectionState); };
+            var debugEl = document.getElementById('viewer-debug-status');
+            var viewerCandidatesSent = 0;
+            var updateViewerDebug = function (extra) {
+                if (debugEl) debugEl.innerText = pc.connectionState + '/ice:' + pc.iceConnectionState + '/sig:' + pc.signalingState + (extra ? ' - ' + extra : '');
+            };
+            pc.onconnectionstatechange = function () { console.log('Viewer connection state:', pc.connectionState); updateViewerDebug(); };
+            pc.oniceconnectionstatechange = function () { console.log('Viewer ICE state:', pc.iceConnectionState); updateViewerDebug(); };
+            pc.onicegatheringstatechange = function () { console.log('Viewer ICE gathering state:', pc.iceGatheringState); };
+            setTimeout(function () {
+                if (viewerCandidatesSent === 0) {
+                    console.error('Viewer: NO ICE candidates generated after 6s - gathering state:', pc.iceGatheringState);
+                    updateViewerDebug('no network candidates found - likely a firewall/network/ad-blocker block on this device');
+                }
+            }, 6000);
             pc.ontrack = function (e) {
                 document.getElementById('stream-waiting').classList.add('hidden');
                 var video = document.getElementById('stream-viewer-video');
@@ -516,10 +530,12 @@
             };
             pc.onicecandidate = function (e) {
                 if (e.candidate) {
+                    viewerCandidatesSent++;
+                    updateViewerDebug(viewerCandidatesSent + ' candidates sent');
                     peerDocRef.update({ viewerCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) })
                         .catch(function (e2) { console.error('Viewer: failed to send ICE candidate', e2); });
                 } else {
-                    console.log('Viewer: ICE gathering complete');
+                    console.log('Viewer: ICE gathering complete, total sent:', viewerCandidatesSent);
                 }
             };
 
