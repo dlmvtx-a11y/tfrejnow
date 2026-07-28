@@ -1,4 +1,4 @@
-var CACHE_NAME = 'tfrejnow-v3';
+var CACHE_NAME = 'tfrejnow-v4';
 var CORE_ASSETS = ['index.html', 'assets/style.css', 'assets/app.js', 'assets/pages.js', 'assets/title-page.js', 'manifest.json', 'assets/icons/icon-192.png', 'assets/icons/icon-512.png'];
 
 self.addEventListener('install', function (event) {

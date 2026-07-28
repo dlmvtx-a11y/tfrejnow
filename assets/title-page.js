@@ -27,8 +27,9 @@ App.initTitlePage = function () {
                 App.renderTitleDetails(data, type);
                 if (autoResume) App.startWatching();
             })
-            .catch(function () {
-                document.getElementById('title-body').innerHTML = '<div class="text-center py-20 text-zinc-500 font-bold">Failed to load this title. <button onclick="location.reload()" class="text-primary font-bold hover:underline">Retry</button></div>';
+            .catch(function (err) {
+                console.error('Failed to load title - real error below:', err);
+                document.getElementById('title-body').innerHTML = '<div class="text-center py-20 text-zinc-500 font-bold">Failed to load this title. <button onclick="location.reload()" class="text-primary font-bold hover:underline">Retry</button><br><span class="text-xs text-red-400 mt-2 block">' + (err && err.message ? err.message : 'Check the browser console for details.') + '</span></div>';
             });
     });
 };
@@ -212,26 +213,33 @@ App.startWatching = function () {
     var target = document.getElementById('player-injection-target');
     if (target.innerHTML.trim() === '') target.innerHTML = document.getElementById('player-template').innerHTML;
 
-    var nextBtn = document.getElementById('btn-next-episode');
-    if (App.currentMediaType === 'tv') {
-        var tvSection = document.getElementById('tv-season-episodes-section');
-        tvSection.classList.remove('hidden'); tvSection.classList.add('flex');
-        document.getElementById('server-note').classList.remove('hidden');
-        if (nextBtn) { nextBtn.classList.remove('hidden'); nextBtn.classList.add('flex'); }
-        App.setupTvDetails(App.currentItemData);
-        App.saveProgress(App.currentItemData, 'tv', App.currentSeason, App.currentEpisode);
-        App.logWatchEvent(App.currentItemData, 'tv', App.currentSeason, App.currentEpisode);
-    } else {
-        document.getElementById('tv-season-episodes-section').classList.add('hidden');
-        document.getElementById('server-note').classList.add('hidden');
-        if (nextBtn) { nextBtn.classList.add('hidden'); nextBtn.classList.remove('flex'); }
-        App.saveProgress(App.currentItemData, 'movie', null, null);
-        App.logWatchEvent(App.currentItemData, 'movie', null, null);
+    try {
+        var nextBtn = document.getElementById('btn-next-episode');
+        if (App.currentMediaType === 'tv') {
+            var tvSection = document.getElementById('tv-season-episodes-section');
+            tvSection.classList.remove('hidden'); tvSection.classList.add('flex');
+            document.getElementById('server-note').classList.remove('hidden');
+            if (nextBtn) { nextBtn.classList.remove('hidden'); nextBtn.classList.add('flex'); }
+            App.setupTvDetails(App.currentItemData);
+            App.saveProgress(App.currentItemData, 'tv', App.currentSeason, App.currentEpisode);
+            App.logWatchEvent(App.currentItemData, 'tv', App.currentSeason, App.currentEpisode);
+        } else {
+            document.getElementById('tv-season-episodes-section').classList.add('hidden');
+            document.getElementById('server-note').classList.add('hidden');
+            if (nextBtn) { nextBtn.classList.add('hidden'); nextBtn.classList.remove('flex'); }
+            App.saveProgress(App.currentItemData, 'movie', null, null);
+            App.logWatchEvent(App.currentItemData, 'movie', null, null);
+        }
+
+        App.renderServerTabs();
+        App.changeServer();
+        App.updatePresence(App.currentItemData, App.currentMediaType);
+    } catch (err) {
+        console.error('startWatching failed - real error below:', err);
+        App.showToast('Something went wrong starting playback. Check the console for details.');
+        return;
     }
 
-    App.renderServerTabs();
-    App.changeServer();
-    App.updatePresence(App.currentItemData, App.currentMediaType);
     setTimeout(function () {
         var vc = document.getElementById('video-container');
         if (vc) vc.scrollIntoView({ behavior: 'smooth', block: 'center' });
