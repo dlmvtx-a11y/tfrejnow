@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=62">
+    <link rel="stylesheet" href="assets/style.css?v=63">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=62"></script>
-    <script src="assets/app.js?v=62"></script>
+    <script src="assets/firebase-config.js?v=63"></script>
+    <script src="assets/app.js?v=63"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -68,6 +68,10 @@
                     <button id="leave-party-btn" class="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs md:text-sm font-bold px-3 md:px-4 py-2.5 rounded-lg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg> Leave</button>
                 </div>
             </div>
+            <p id="speaking-indicator" class="hidden text-xs font-bold text-green-400 flex items-center gap-1.5">
+                <span class="flex gap-0.5"><span class="w-0.5 h-2.5 bg-green-400 rounded-full animate-pulse"></span><span class="w-0.5 h-3.5 bg-green-400 rounded-full animate-pulse" style="animation-delay:0.15s"></span><span class="w-0.5 h-2 bg-green-400 rounded-full animate-pulse" style="animation-delay:0.3s"></span></span>
+                <span id="speaking-names"></span>
+            </p>
 
             <div id="host-controls" class="hidden flex flex-wrap items-center gap-2"></div>
 
@@ -425,6 +429,48 @@
                 if (!panel.classList.contains('hidden') && !panel.contains(e.target) && !btn.contains(e.target)) panel.classList.add('hidden');
             });
 
+            var speakingState = {}; // uid -> {speaking: bool, name: string}
+            function updateSpeakingDisplay() {
+                var el = document.getElementById('speaking-indicator');
+                var namesEl = document.getElementById('speaking-names');
+                var names = Object.keys(speakingState).filter(function (uid) { return speakingState[uid].speaking; }).map(function (uid) { return speakingState[uid].name; });
+                if (names.length) { el.classList.remove('hidden'); namesEl.innerText = names.join(', ') + (names.length === 1 ? ' is talking' : ' are talking'); }
+                else el.classList.add('hidden');
+            }
+            function startSpeakingMonitor(stream, uid, name) {
+                try {
+                    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    var source = audioCtx.createMediaStreamSource(stream);
+                    var analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 512;
+                    analyser.smoothingTimeConstant = 0.6;
+                    source.connect(analyser);
+                    var data = new Uint8Array(analyser.frequencyBinCount);
+                    var rafId;
+                    speakingState[uid] = { speaking: false, name: name };
+                    function tick() {
+                        analyser.getByteFrequencyData(data);
+                        var avg = data.reduce(function (a, b) { return a + b; }, 0) / data.length;
+                        var speaking = avg > 14;
+                        if (speakingState[uid].speaking !== speaking) {
+                            speakingState[uid].speaking = speaking;
+                            updateSpeakingDisplay();
+                            var localBtn = document.getElementById('voice-mute-btn');
+                            if (uid === 'local' && localBtn) localBtn.classList.toggle('speaking-ring', speaking);
+                        }
+                        rafId = requestAnimationFrame(tick);
+                    }
+                    tick();
+                    return function stopMonitor() {
+                        cancelAnimationFrame(rafId);
+                        delete speakingState[uid];
+                        updateSpeakingDisplay();
+                        try { audioCtx.close(); } catch (e) {}
+                    };
+                } catch (e) { console.error('Speaking monitor failed to start', e); return function () {}; }
+            }
+            var stopLocalSpeakingMonitor = null;
+
             function kickMember(uid) {
                 roomRef.collection('members').doc(uid).delete().catch(function (e) { console.error('Failed to kick member', e); App.showToast('Failed to remove that person.'); });
                 roomRef.collection('streamPeers').doc(uid).delete().catch(function () {});
@@ -455,6 +501,7 @@
                     document.getElementById('voice-unmuted-icon').classList.toggle('hidden', voiceMuted);
                     document.getElementById('voice-muted-icon').classList.toggle('hidden', !voiceMuted);
                     roomRef.collection('members').doc(user.uid).set({ voiceEnabled: true }, { merge: true });
+                    stopLocalSpeakingMonitor = startSpeakingMonitor(stream, 'local', 'You');
                 }).catch(function (e) {
                     console.error('Mic access failed', e);
                     App.showToast('Could not access your microphone: ' + (e && e.message ? e.message : 'permission denied'));
@@ -463,6 +510,7 @@
 
             function stopVoiceChat() {
                 voiceEnabled = false;
+                if (stopLocalSpeakingMonitor) { stopLocalSpeakingMonitor(); stopLocalSpeakingMonitor = null; }
                 if (localVoiceStream) { localVoiceStream.getTracks().forEach(function (t) { t.stop(); }); localVoiceStream = null; }
                 Object.keys(voicePeerConnections).forEach(function (uid) { disconnectVoicePeer(uid); });
                 document.getElementById('voice-toggle-label').innerText = 'Join Voice';
@@ -481,12 +529,15 @@
 
             function syncVoiceConnections(currentUser, snap) {
                 if (!voiceEnabled) return;
-                var others = snap.docs.filter(function (d) { return d.data().voiceEnabled && d.id !== currentUser.uid; }).map(function (d) { return d.id; });
-                others.forEach(function (uid) { if (!voicePeerConnections[uid]) connectVoicePeer(currentUser, uid); });
-                Object.keys(voicePeerConnections).forEach(function (uid) { if (others.indexOf(uid) === -1) disconnectVoicePeer(uid); });
+                var others = snap.docs.filter(function (d) { return d.data().voiceEnabled && d.id !== currentUser.uid; });
+                var otherUids = others.map(function (d) { return d.id; });
+                others.forEach(function (d) { if (!voicePeerConnections[d.id]) connectVoicePeer(currentUser, d.id, d.data().name || 'Someone'); });
+                Object.keys(voicePeerConnections).forEach(function (uid) { if (otherUids.indexOf(uid) === -1) disconnectVoicePeer(uid); });
             }
 
-            function connectVoicePeer(currentUser, otherUid) {
+            var remoteSpeakingMonitors = {}; // otherUid -> stop function
+
+            function connectVoicePeer(currentUser, otherUid, otherName) {
                 var key = voicePairKey(currentUser.uid, otherUid);
                 var docRef = roomRef.collection('voicePeers').doc(key);
                 var amOfferer = currentUser.uid < otherUid;
@@ -503,6 +554,7 @@
                     audioEl.autoplay = true;
                     audioEl.srcObject = e.streams[0];
                     document.body.appendChild(audioEl);
+                    remoteSpeakingMonitors[otherUid] = startSpeakingMonitor(e.streams[0], otherUid, otherName);
                 };
                 pc.onconnectionstatechange = function () { console.log('Voice connection to', otherUid, ':', pc.connectionState); };
 
@@ -544,6 +596,7 @@
 
             function disconnectVoicePeer(otherUid) {
                 if (voicePeerConnections[otherUid]) { voicePeerConnections[otherUid].close(); delete voicePeerConnections[otherUid]; }
+                if (remoteSpeakingMonitors[otherUid]) { remoteSpeakingMonitors[otherUid](); delete remoteSpeakingMonitors[otherUid]; }
                 var audioEl = document.getElementById('voice-audio-' + otherUid);
                 if (audioEl) audioEl.remove();
             }
@@ -783,8 +836,17 @@
 
             document.getElementById('viewer-fullscreen-btn').addEventListener('click', function () {
                 var wrap = document.getElementById('stream-viewer-wrap');
+                var video = document.getElementById('stream-viewer-video');
+                // iOS Safari doesn't support the standard Fullscreen API on arbitrary
+                // elements, but has its own non-standard fullscreen just for <video>.
+                if (video.webkitEnterFullscreen) {
+                    try { video.webkitEnterFullscreen(); return; } catch (e) { console.error('webkitEnterFullscreen failed', e); }
+                }
                 var req = wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.mozRequestFullScreen || wrap.msRequestFullscreen;
-                if (!req) { App.showToast('Fullscreen isn\'t supported in this browser.'); console.error('No fullscreen API available on this element/browser'); return; }
+                if (!req) {
+                    wrap.classList.toggle('pseudo-fullscreen');
+                    return;
+                }
                 var result = req.call(wrap);
                 if (result && result.catch) {
                     result.catch(function (e) { console.error('Fullscreen request failed:', e); App.showToast('Could not enter fullscreen: ' + (e && e.message ? e.message : 'unknown error')); });

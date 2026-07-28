@@ -12,6 +12,8 @@ window.CHANGELOG_ENTRIES = [
             'Viewers in Live Stream mode now get real video controls - volume and fullscreen, plus a live connection quality indicator (play/pause stays host-only, since it\'s a live broadcast)',
             'Live Stream now auto-reconnects if a viewer\'s connection drops, and warns clearly (with specific guidance) if an ad-blocker or privacy extension is blocking the connection',
             'New: Voice chat in watch parties - talk to everyone in the party live, with mute control, works alongside both Watch Room and Live Stream modes',
+            'Voice chat now shows who\'s actually talking in real time, and a glowing ring around the mic button when you\'re speaking',
+            'Fixed fullscreen not working on some mobile browsers (iOS Safari needed a different approach)',
             'Hosts can now mute someone\'s chat too, separately from their mic - actually enforced server-side, not just a visual toggle',
             'Hosts can now mute someone\'s microphone in voice chat, not just kick them (click the "watching" count to see who\'s in)',
             'Hosts can now remove someone from a watch party (click the "watching" count to see who\'s in, with a Kick option next to each person)',
