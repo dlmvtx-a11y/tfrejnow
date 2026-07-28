@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=46">
+    <link rel="stylesheet" href="assets/style.css?v=47">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=46"></script>
-    <script src="assets/app.js?v=46"></script>
+    <script src="assets/firebase-config.js?v=47"></script>
+    <script src="assets/app.js?v=47"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -126,6 +126,7 @@
         var roomData = null;
         var localStream = null;
         var hostPeerConnections = {}; // viewerUid -> RTCPeerConnection (host side)
+        var stepStatus = {}; // viewerUid -> current step label, for live debug display
         var viewerPeerConnection = null; // viewer side
 
         function show(id) {
@@ -378,13 +379,14 @@
             var statusEl = document.getElementById('stream-status');
             var uids = Object.keys(hostPeerConnections);
             if (!uids.length) { statusEl.innerText = 'Sharing live - waiting for someone to join...'; return; }
-            var details = uids.map(function (uid) {
+            var lines = uids.map(function (uid) {
                 var pc = hostPeerConnections[uid];
-                return pc.connectionState + '/ice:' + pc.iceConnectionState + '/sig:' + pc.signalingState;
+                var step = stepStatus[uid] || '';
+                return uid.slice(0, 6) + ': ' + pc.connectionState + '/ice:' + pc.iceConnectionState + '/sig:' + pc.signalingState + (step ? ' (' + step + ')' : '');
             });
-            var connected = details.filter(function (s) { return s.indexOf('connected') > -1; }).length;
+            var connected = uids.filter(function (uid) { return hostPeerConnections[uid].connectionState === 'connected'; }).length;
             statusEl.innerHTML = 'Sharing live - ' + connected + '/' + uids.length + ' viewer(s) connected' +
-                '<br><span class="text-[10px] opacity-70">Debug: ' + details.join(', ') + '</span>';
+                '<br><span class="text-[10px] opacity-70">' + lines.join('<br>') + '</span>';
         }
 
         function connectToViewer(viewerUid, peerDocRef) {
@@ -416,18 +418,26 @@
                 if (e.candidate) peerDocRef.update({ hostCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) }).catch(function(){});
             };
 
+            var updateStep = function (label) {
+                stepStatus[viewerUid] = label;
+                updateShareStatus();
+            };
+            updateStep('creating offer...');
+
             pc.createOffer().then(function (offer) {
                 console.log('Host: offer created for', viewerUid);
+                updateStep('offer created, setting local description...');
                 return pc.setLocalDescription(offer);
             }).then(function () {
                 console.log('Host: local description set for', viewerUid, '- signalingState:', pc.signalingState);
-                updateShareStatus();
+                updateStep('local description set (sig:' + pc.signalingState + '), writing to database...');
                 return peerDocRef.update({ offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
             }).then(function () {
                 console.log('Host: offer written to Firestore for', viewerUid);
+                updateStep('offer sent - waiting for answer...');
             }).catch(function (e) {
                 console.error('Host: offer setup FAILED for', viewerUid, '- real error:', e);
-                statusEl.innerHTML = 'Error setting up connection: ' + (e && e.message ? e.message : 'unknown') + '<br><span class="text-[10px] opacity-70">Check console for details</span>';
+                updateStep('FAILED: ' + (e && e.message ? e.message : 'unknown error'));
             });
 
             var processedViewerCandidates = 0;
