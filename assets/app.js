@@ -951,32 +951,21 @@ App.registerServiceWorker = function () {
 };
 
 App.injectPwaManifest = function () {
+    // The manifest itself is now a real static manifest.json linked directly in
+    // every page's <head> - required for Android/APK tooling (like PWABuilder)
+    // to actually discover it over the network, which a JS-injected blob: URL
+    // cannot be. This just adds the couple of Apple-specific meta tags that
+    // aren't worth hardcoding into every single HTML file.
     if (App._pwaInjected) return;
     App._pwaInjected = true;
     try {
-        var manifest = {
-            name: 'TfrejNOW', short_name: 'TfrejNOW',
-            description: 'Search and stream movies, TV shows, and anime.',
-            start_url: 'index.html', display: 'standalone',
-            background_color: '#09090b', theme_color: '#6d28d9',
-            icons: [{
-                src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%236d28d9'/%3E%3Ctext y='68' x='50' font-size='60' text-anchor='middle' fill='white'%3E%F0%9F%8D%BF%3C/text%3E%3C/svg%3E",
-                sizes: '192x192 512x512', type: 'image/svg+xml', purpose: 'any'
-            }]
-        };
-        var blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        var link = document.createElement('link');
-        link.rel = 'manifest';
-        link.href = URL.createObjectURL(blob);
-        document.head.appendChild(link);
-
         var appleCapable = document.createElement('meta');
         appleCapable.name = 'apple-mobile-web-app-capable'; appleCapable.content = 'yes';
         document.head.appendChild(appleCapable);
         var appleStatus = document.createElement('meta');
         appleStatus.name = 'apple-mobile-web-app-status-bar-style'; appleStatus.content = 'black-translucent';
         document.head.appendChild(appleStatus);
-    } catch (e) { console.error('PWA manifest injection failed', e); }
+    } catch (e) { console.error('PWA meta injection failed', e); }
 };
 
 App.renderAnnouncementBanner = function () {
