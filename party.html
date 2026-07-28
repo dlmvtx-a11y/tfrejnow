@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=37">
+    <link rel="stylesheet" href="assets/style.css?v=38">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=37"></script>
-    <script src="assets/app.js?v=37"></script>
+    <script src="assets/firebase-config.js?v=38"></script>
+    <script src="assets/app.js?v=38"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -130,7 +130,11 @@
                 if (user) { loadRoom(user); }
                 else {
                     firebase.auth().signInAnonymously().catch(function (e) {
-                        console.error('Anonymous sign-in failed', e);
+                        console.error('Anonymous sign-in failed - real error below:', e);
+                        document.getElementById('room-not-found').innerHTML =
+                            '<h1 class="text-2xl font-black">Could not join</h1>' +
+                            '<p class="text-zinc-500">' + (e && e.code === 'auth/admin-restricted-operation' ? 'Anonymous sign-in is not enabled for this site yet.' : (e && e.message ? e.message : 'Unknown error.')) + '</p>' +
+                            '<a href="index.html" class="text-primary font-bold hover:underline">Back to Home</a>';
                         show('room-not-found');
                     });
                 }
@@ -155,6 +159,10 @@
                 show('name-prompt');
             }).catch(function (e) {
                 console.error('Failed to load room - real error below:', e);
+                document.getElementById('room-not-found').innerHTML =
+                    '<h1 class="text-2xl font-black">Could not load this party</h1>' +
+                    '<p class="text-zinc-500 max-w-sm">' + (e && e.code === 'permission-denied' ? 'Permission denied - the site\'s database rules likely need updating.' : (e && e.message ? e.message : 'Unknown error.')) + '</p>' +
+                    '<a href="index.html" class="text-primary font-bold hover:underline">Back to Home</a>';
                 show('room-not-found');
             });
         }
@@ -293,6 +301,10 @@
         /* ---------- WebRTC: HOST SIDE ---------- */
         function startHostSharing() {
             var statusEl = document.getElementById('stream-status');
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                statusEl.innerText = 'Screen sharing isn\'t supported here - try a regular desktop or mobile browser (Chrome/Safari/Firefox), not an installed app.';
+                return;
+            }
             navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
                 localStream = stream;
                 statusEl.innerText = 'Sharing live - keep this tab open.';
@@ -308,8 +320,13 @@
                     });
                 });
             }).catch(function (e) {
-                console.error('getDisplayMedia failed', e);
-                statusEl.innerText = 'Could not start sharing - permission denied or cancelled.';
+                console.error('getDisplayMedia failed - real error below:', e);
+                var reason = 'Unknown error.';
+                if (e && e.name === 'NotAllowedError') reason = 'Screen sharing was blocked or cancelled.';
+                else if (e && e.name === 'NotSupportedError') reason = 'Screen sharing isn\'t supported in this browser/app - try a regular desktop or mobile browser instead of an installed app wrapper.';
+                else if (e && e.name === 'NotFoundError') reason = 'No screen/window available to share.';
+                else if (e && e.message) reason = e.message;
+                statusEl.innerText = 'Could not start sharing: ' + reason;
             });
         }
 
