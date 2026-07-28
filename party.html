@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=42">
+    <link rel="stylesheet" href="assets/style.css?v=44">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=42"></script>
-    <script src="assets/app.js?v=42"></script>
+    <script src="assets/firebase-config.js?v=44"></script>
+    <script src="assets/app.js?v=44"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -109,7 +109,14 @@
     <script>
         App.initFirebase();
 
-        var ICE_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        var ICE_CONFIG = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            ]
+        };
         var params = new URLSearchParams(location.search);
         var roomId = params.get('room');
         var isHostParam = params.get('host') === '1';
@@ -367,12 +374,15 @@
 
         function updateShareStatus() {
             var statusEl = document.getElementById('stream-status');
-            var states = Object.keys(hostPeerConnections).map(function (uid) { return hostPeerConnections[uid].connectionState; });
-            var connected = states.filter(function (s) { return s === 'connected'; }).length;
-            var connecting = states.filter(function (s) { return s === 'connecting' || s === 'new'; }).length;
-            if (!states.length) statusEl.innerText = 'Sharing live - waiting for someone to join...';
-            else if (connected > 0) statusEl.innerText = 'Sharing live - ' + connected + ' viewer' + (connected === 1 ? '' : 's') + ' connected' + (connecting ? ', ' + connecting + ' connecting...' : '');
-            else statusEl.innerText = 'Sharing live - connecting to ' + connecting + ' viewer' + (connecting === 1 ? '' : 's') + '...';
+            var uids = Object.keys(hostPeerConnections);
+            if (!uids.length) { statusEl.innerText = 'Sharing live - waiting for someone to join...'; return; }
+            var details = uids.map(function (uid) {
+                var pc = hostPeerConnections[uid];
+                return pc.connectionState + '/' + pc.iceConnectionState;
+            });
+            var connected = details.filter(function (s) { return s.indexOf('connected') > -1; }).length;
+            statusEl.innerHTML = 'Sharing live - ' + connected + '/' + uids.length + ' viewer(s) connected' +
+                '<br><span class="text-[10px] opacity-70">Debug: ' + details.join(', ') + '</span>';
         }
 
         function connectToViewer(viewerUid, peerDocRef) {
@@ -381,7 +391,11 @@
             localStream.getTracks().forEach(function (track) { pc.addTrack(track, localStream); });
 
             pc.onconnectionstatechange = function () {
-                console.log('Host connection to viewer ' + viewerUid + ':', pc.connectionState);
+                console.log('Host connection to viewer ' + viewerUid + ':', pc.connectionState, '| ICE state:', pc.iceConnectionState);
+                updateShareStatus();
+            };
+            pc.oniceconnectionstatechange = function () {
+                console.log('Host ICE state for viewer ' + viewerUid + ':', pc.iceConnectionState);
                 updateShareStatus();
             };
 

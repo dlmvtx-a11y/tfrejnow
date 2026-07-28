@@ -7,6 +7,8 @@ window.CHANGELOG_ENTRIES = [
         items: [
             'New: Watch Together now offers two modes - a synced Watch Room (chat + same starting point), or a true Live Stream where the host shares their screen and everyone watches the exact same feed in real time',
             'Live chat and quick reactions inside every watch party',
+            'Fixed the host\'s screen-sharing button staying visible and confusing even after sharing had actually started',
+            'Leaving a watch party now takes you back where you came from, and notifies everyone else if the host leaves',
             'Fixed a bug where shared watch party links wouldn\'t open',
             'Fixed a real bug where resuming Continue Watching, or starting playback on a fresh title, could silently fail with no video and no server options showing'
         ]
