@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=38">
+    <link rel="stylesheet" href="assets/style.css?v=39">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=38"></script>
-    <script src="assets/app.js?v=38"></script>
+    <script src="assets/firebase-config.js?v=39"></script>
+    <script src="assets/app.js?v=39"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -307,7 +307,7 @@
             }
             navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
                 localStream = stream;
-                statusEl.innerText = 'Sharing live - keep this tab open.';
+                updateShareStatus();
                 stream.getVideoTracks()[0].addEventListener('ended', function () {
                     statusEl.innerText = 'Sharing stopped. Click above to restart.';
                 });
@@ -330,10 +330,25 @@
             });
         }
 
+        function updateShareStatus() {
+            var statusEl = document.getElementById('stream-status');
+            var states = Object.keys(hostPeerConnections).map(function (uid) { return hostPeerConnections[uid].connectionState; });
+            var connected = states.filter(function (s) { return s === 'connected'; }).length;
+            var connecting = states.filter(function (s) { return s === 'connecting' || s === 'new'; }).length;
+            if (!states.length) statusEl.innerText = 'Sharing live - waiting for someone to join...';
+            else if (connected > 0) statusEl.innerText = 'Sharing live - ' + connected + ' viewer' + (connected === 1 ? '' : 's') + ' connected' + (connecting ? ', ' + connecting + ' connecting...' : '');
+            else statusEl.innerText = 'Sharing live - connecting to ' + connecting + ' viewer' + (connecting === 1 ? '' : 's') + '...';
+        }
+
         function connectToViewer(viewerUid, peerDocRef) {
             var pc = new RTCPeerConnection(ICE_CONFIG);
             hostPeerConnections[viewerUid] = pc;
             localStream.getTracks().forEach(function (track) { pc.addTrack(track, localStream); });
+
+            pc.onconnectionstatechange = function () {
+                console.log('Host connection to viewer ' + viewerUid + ':', pc.connectionState);
+                updateShareStatus();
+            };
 
             pc.onicecandidate = function (e) {
                 if (e.candidate) peerDocRef.update({ hostCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) }).catch(function(){});
@@ -365,6 +380,7 @@
 
             var pc = new RTCPeerConnection(ICE_CONFIG);
             viewerPeerConnection = pc;
+            pc.onconnectionstatechange = function () { console.log('Viewer connection state:', pc.connectionState); };
             pc.ontrack = function (e) {
                 document.getElementById('stream-waiting').classList.add('hidden');
                 var video = document.getElementById('stream-viewer-video');
