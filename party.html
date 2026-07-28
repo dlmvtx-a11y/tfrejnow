@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=39">
+    <link rel="stylesheet" href="assets/style.css?v=40">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=39"></script>
-    <script src="assets/app.js?v=39"></script>
+    <script src="assets/firebase-config.js?v=40"></script>
+    <script src="assets/app.js?v=40"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -54,6 +54,7 @@
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <button id="copy-link-btn" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-xs md:text-sm font-bold px-3 md:px-4 py-2.5 rounded-lg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy Invite Link</button>
                     <span id="member-count" class="text-xs md:text-sm text-zinc-400 font-bold">1 watching</span>
+                    <a href="index.html" class="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs md:text-sm font-bold px-3 md:px-4 py-2.5 rounded-lg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg> Leave</a>
                 </div>
             </div>
 
@@ -315,9 +316,13 @@
                 roomRef.collection('streamPeers').onSnapshot(function (snap) {
                     snap.docChanges().forEach(function (change) {
                         if (change.type === 'added' && !hostPeerConnections[change.doc.id]) {
+                            console.log('Host: detected new viewer', change.doc.id);
                             connectToViewer(change.doc.id, change.doc.ref);
                         }
                     });
+                }, function (e) {
+                    console.error('Host: FAILED to listen for viewers - real error below:', e);
+                    statusEl.innerText = 'Error watching for viewers: ' + (e && e.message ? e.message : 'unknown error');
                 });
             }).catch(function (e) {
                 console.error('getDisplayMedia failed - real error below:', e);
@@ -376,7 +381,12 @@
         /* ---------- WebRTC: VIEWER SIDE ---------- */
         function joinAsStreamViewer(user) {
             var peerDocRef = roomRef.collection('streamPeers').doc(user.uid);
-            peerDocRef.set({ joinedAt: firebase.firestore.FieldValue.serverTimestamp(), offer: null, answer: null, hostCandidates: [], viewerCandidates: [] }, { merge: true });
+            peerDocRef.set({ joinedAt: firebase.firestore.FieldValue.serverTimestamp(), offer: null, answer: null, hostCandidates: [], viewerCandidates: [] }, { merge: true })
+                .then(function () { console.log('Viewer: registered with host successfully'); })
+                .catch(function (e) {
+                    console.error('Viewer: FAILED to register with host - real error below:', e);
+                    document.getElementById('stream-waiting').innerHTML = '<p class="text-red-400 text-sm text-center max-w-xs">Could not connect to the host: ' + (e && e.message ? e.message : 'unknown error') + '</p>';
+                });
 
             var pc = new RTCPeerConnection(ICE_CONFIG);
             viewerPeerConnection = pc;
