@@ -973,11 +973,13 @@ App.removeFromWatchlist = function (id) {
 App.saveProgress = function (item, mediaType, season, episode, progressPercent) {
     if (!App.requireAuth()) return;
     var existing = App.userData.progress[item.id] || {};
+    var resolvedPercent = (typeof progressPercent === 'number') ? progressPercent
+        : (typeof existing.progressPercent === 'number' ? existing.progressPercent : null);
     App.userData.progress[item.id] = {
         id: item.id, title: item.name || item.title, poster_path: item.poster_path,
         media_type: mediaType, season: season || null, episode: episode || null,
         genreIds: (item.genres || []).map(function (g) { return g.id; }),
-        progressPercent: (typeof progressPercent === 'number') ? progressPercent : existing.progressPercent,
+        progressPercent: resolvedPercent,
         ts: Date.now()
     };
     App.saveUserData();
