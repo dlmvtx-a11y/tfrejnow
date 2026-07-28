@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=35">
+    <link rel="stylesheet" href="assets/style.css?v=37">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=35"></script>
-    <script src="assets/app.js?v=35"></script>
+    <script src="assets/firebase-config.js?v=37"></script>
+    <script src="assets/app.js?v=37"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -29,7 +29,6 @@
         <span class="text-zinc-500 text-xs font-bold tracking-wide">Joining watch party...</span>
     </div>
 
-    <!-- Name prompt for anonymous joiners -->
     <div id="name-prompt" class="hidden fixed inset-0 z-[1900] bg-background flex flex-col items-center justify-center gap-6 px-4">
         <a href="index.html" class="mb-2"><span class="text-3xl font-black tracking-tighter"><span class="text-white">Tfrej</span><span class="text-primary">NOW</span></span></a>
         <div id="party-preview-card" class="hidden flex-col items-center gap-3"></div>
@@ -45,7 +44,6 @@
         <a href="index.html" class="text-primary font-bold hover:underline">Back to Home</a>
     </div>
 
-    <!-- Main room UI -->
     <div id="room-ui" class="hidden flex-1 flex flex-col lg:flex-row min-h-screen">
         <div class="flex-1 flex flex-col p-3 md:p-6 gap-4 min-w-0">
             <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -61,12 +59,26 @@
 
             <div id="host-controls" class="hidden flex flex-wrap items-center gap-2"></div>
 
-            <div class="relative w-full rounded-2xl bg-black aspect-video md:aspect-auto md:h-[550px] border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden">
+            <!-- Room mode: independent iframe playback -->
+            <div id="room-video-wrap" class="hidden relative w-full rounded-2xl bg-black aspect-video md:aspect-auto md:h-[550px] border border-white/10 shadow-2xl items-center justify-center overflow-hidden">
                 <iframe id="party-video-frame" class="w-full h-full absolute inset-0 z-10 bg-black" src="" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+            </div>
+
+            <!-- Stream mode: WebRTC screen share -->
+            <div id="stream-video-wrap" class="hidden relative w-full rounded-2xl bg-black aspect-video md:aspect-auto md:h-[550px] border border-white/10 shadow-2xl flex-col items-center justify-center overflow-hidden">
+                <video id="stream-viewer-video" class="hidden w-full h-full object-contain bg-black" autoplay playsinline></video>
+                <div id="stream-host-panel" class="hidden flex-col items-center gap-4 p-6 text-center">
+                    <p class="text-zinc-400 text-sm max-w-sm">Click below and choose this browser tab (with audio) to start streaming it live to everyone in the party.</p>
+                    <button id="start-share-btn" class="bg-primary hover:bg-primary/80 px-6 py-3 rounded-xl font-bold">📡 Start Sharing This Tab</button>
+                    <p id="stream-status" class="text-xs text-zinc-500"></p>
+                </div>
+                <div id="stream-waiting" class="hidden flex-col items-center gap-3 p-6 text-center">
+                    <div class="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-zinc-400 text-sm">Waiting for the host to start sharing...</p>
+                </div>
             </div>
         </div>
 
-        <!-- Chat panel -->
         <div class="w-full lg:w-96 flex-shrink-0 flex flex-col border-t lg:border-t-0 lg:border-l border-white/10 h-[50vh] lg:h-screen lg:sticky lg:top-0">
             <div class="px-4 py-3 border-b border-white/10 flex-shrink-0">
                 <h2 class="font-black text-sm">Party Chat</h2>
@@ -91,6 +103,7 @@
     <script>
         App.initFirebase();
 
+        var ICE_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         var params = new URLSearchParams(location.search);
         var roomId = params.get('room');
         var isHostParam = params.get('host') === '1';
@@ -98,6 +111,9 @@
         var roomRef = null;
         var isHost = false;
         var roomData = null;
+        var localStream = null;
+        var hostPeerConnections = {}; // viewerUid -> RTCPeerConnection (host side)
+        var viewerPeerConnection = null; // viewer side
 
         function show(id) {
             ['loading-overlay', 'name-prompt', 'room-not-found', 'room-ui'].forEach(function (s) {
@@ -110,20 +126,37 @@
         if (!roomId) {
             show('room-not-found');
         } else {
+            firebase.auth().onAuthStateChanged(function (user) {
+                if (user) { loadRoom(user); }
+                else {
+                    firebase.auth().signInAnonymously().catch(function (e) {
+                        console.error('Anonymous sign-in failed', e);
+                        show('room-not-found');
+                    });
+                }
+            });
+        }
+
+        function loadRoom(user) {
             roomRef = App._db.collection('watchParties').doc(roomId);
             roomRef.get().then(function (doc) {
                 if (!doc.exists) { show('room-not-found'); return; }
                 roomData = doc.data();
+                isHost = isHostParam && roomData.hostUid === user.uid;
+
+                var remembered = sessionStorage.getItem('tfrej_party_name_' + roomId);
+                if (isHost) { joinerName = roomData.hostName; enterRoom(user); return; }
+                if (remembered) { joinerName = remembered; enterRoom(user); return; }
+
                 var preview = document.getElementById('party-preview-card');
                 var poster = roomData.posterPath ? (App.IMG_BASE_URL + roomData.posterPath) : App.NO_POSTER;
                 preview.innerHTML = '<img src="' + poster + '" class="w-20 rounded-xl shadow-lg"><p class="font-bold mt-2 text-center">' + roomData.title + '</p><p class="text-xs text-zinc-500 text-center">Hosted by ' + roomData.hostName + '</p>';
                 preview.classList.remove('hidden'); preview.classList.add('flex');
-
-                firebase.auth().onAuthStateChanged(function (user) {
-                    if (user) { enterRoom(user); }
-                    else { show('name-prompt'); }
-                });
-            }).catch(function () { show('room-not-found'); });
+                show('name-prompt');
+            }).catch(function (e) {
+                console.error('Failed to load room - real error below:', e);
+                show('room-not-found');
+            });
         }
 
         document.getElementById('join-party-btn').addEventListener('click', function () {
@@ -132,20 +165,12 @@
             errEl.classList.add('hidden');
             if (!name) { errEl.innerText = 'Please enter a name.'; errEl.classList.remove('hidden'); return; }
             joinerName = name;
+            sessionStorage.setItem('tfrej_party_name_' + roomId, name);
             show('loading-overlay');
-            firebase.auth().signInAnonymously().then(function (cred) {
-                enterRoom(cred.user);
-            }).catch(function (e) {
-                console.error('Anonymous join failed', e);
-                errEl.innerText = 'Could not join. Check the browser console for details.';
-                errEl.classList.remove('hidden');
-                show('name-prompt');
-            });
+            enterRoom(firebase.auth().currentUser);
         });
 
         function enterRoom(user) {
-            isHost = isHostParam && roomData && roomData.hostUid === user.uid;
-
             var memberRef = roomRef.collection('members').doc(user.uid);
             memberRef.set({
                 name: joinerName || (isHost ? roomData.hostName : 'Guest'),
@@ -164,31 +189,50 @@
 
         function initRoomUI(user) {
             show('room-ui');
+            var isStreamMode = roomData.mode === 'stream';
+
             document.getElementById('copy-link-btn').addEventListener('click', function () {
-                navigator.clipboard.writeText(location.href).then(function () {
-                    App.showToast('Invite link copied');
-                });
+                navigator.clipboard.writeText(location.href).then(function () { App.showToast('Invite link copied'); });
             });
 
-            // Live room state - keeps everyone in sync with the host
+            if (isStreamMode) {
+                document.getElementById('stream-video-wrap').classList.remove('hidden');
+                document.getElementById('stream-video-wrap').classList.add('flex');
+                if (isHost) {
+                    document.getElementById('stream-host-panel').classList.remove('hidden');
+                    document.getElementById('stream-host-panel').classList.add('flex');
+                    document.getElementById('start-share-btn').addEventListener('click', startHostSharing);
+                } else {
+                    document.getElementById('stream-waiting').classList.remove('hidden');
+                    document.getElementById('stream-waiting').classList.add('flex');
+                    joinAsStreamViewer(user);
+                }
+            } else {
+                document.getElementById('room-video-wrap').classList.remove('hidden');
+                document.getElementById('room-video-wrap').classList.add('flex');
+            }
+
             roomRef.onSnapshot(function (doc) {
                 if (!doc.exists) { show('room-not-found'); return; }
                 var d = doc.data();
                 roomData = d;
                 document.getElementById('room-title').innerText = d.title;
-                document.getElementById('room-subtitle').innerText = 'Hosted by ' + d.hostName + (d.mediaType === 'tv' ? ' · Season ' + d.season + ', Episode ' + d.episode : '');
-                var url = App.SERVERS[d.serverKey] ? App.SERVERS[d.serverKey][d.mediaType === 'tv' ? 'tv' : 'movie'] : null;
-                var frame = document.getElementById('party-video-frame');
-                if (url) {
-                    App.currentSeason = d.season; App.currentEpisode = d.episode;
-                    var newSrc = url(d.itemId);
-                    if (frame.src !== newSrc) frame.src = newSrc;
+                document.getElementById('room-subtitle').innerText = 'Hosted by ' + d.hostName +
+                    (isStreamMode ? ' · Live Stream' : (d.mediaType === 'tv' ? ' · Season ' + d.season + ', Episode ' + d.episode : ''));
+
+                if (!isStreamMode) {
+                    var url = App.SERVERS[d.serverKey] ? App.SERVERS[d.serverKey][d.mediaType === 'tv' ? 'tv' : 'movie'] : null;
+                    var frame = document.getElementById('party-video-frame');
+                    if (url) {
+                        var newSrc = url(d.itemId);
+                        if (frame.src !== newSrc) frame.src = newSrc;
+                    }
+                    if (isHost) renderHostControls(d);
                 }
-                if (isHost) renderHostControls(d);
             });
 
             roomRef.collection('members').onSnapshot(function (snap) {
-                document.getElementById('member-count').innerText = snap.size + (snap.size === 1 ? ' watching' : ' watching');
+                document.getElementById('member-count').innerText = snap.size + ' watching';
             });
 
             var chatBox = document.getElementById('chat-messages');
@@ -211,17 +255,18 @@
                 var text = input.value.trim();
                 if (!text) return;
                 input.value = '';
-                roomRef.collection('messages').add({
-                    senderName: joinerName, text: text, type: 'chat', ts: firebase.firestore.FieldValue.serverTimestamp()
-                }).catch(function (e) { console.error('send message failed', e); });
+                roomRef.collection('messages').add({ senderName: joinerName, text: text, type: 'chat', ts: firebase.firestore.FieldValue.serverTimestamp() }).catch(function (e) { console.error('send message failed', e); });
             });
 
             document.querySelectorAll('.reaction-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    roomRef.collection('messages').add({
-                        senderName: joinerName, text: btn.getAttribute('data-emoji'), type: 'reaction', ts: firebase.firestore.FieldValue.serverTimestamp()
-                    }).catch(function (e) { console.error('send reaction failed', e); });
+                    roomRef.collection('messages').add({ senderName: joinerName, text: btn.getAttribute('data-emoji'), type: 'reaction', ts: firebase.firestore.FieldValue.serverTimestamp() }).catch(function (e) { console.error('send reaction failed', e); });
                 });
+            });
+
+            window.addEventListener('beforeunload', function () {
+                Object.keys(hostPeerConnections).forEach(function (uid) { hostPeerConnections[uid].close(); });
+                if (viewerPeerConnection) viewerPeerConnection.close();
             });
         }
 
@@ -236,20 +281,104 @@
                 (d.mediaType === 'tv'
                     ? '<button id="host-prev-ep" class="px-3 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10">← Prev Ep</button><button id="host-next-ep" class="px-3 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10">Next Ep →</button>'
                     : '');
-
             el.querySelectorAll('.host-server-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    roomRef.update({ serverKey: btn.getAttribute('data-key'), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-                });
+                btn.addEventListener('click', function () { roomRef.update({ serverKey: btn.getAttribute('data-key'), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); });
             });
             var prevBtn = document.getElementById('host-prev-ep');
             var nextBtn = document.getElementById('host-next-ep');
-            if (nextBtn) nextBtn.addEventListener('click', function () {
-                roomRef.update({ episode: (d.episode || 1) + 1, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            if (nextBtn) nextBtn.addEventListener('click', function () { roomRef.update({ episode: (d.episode || 1) + 1, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); });
+            if (prevBtn) prevBtn.addEventListener('click', function () { if ((d.episode || 1) > 1) roomRef.update({ episode: d.episode - 1, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); });
+        }
+
+        /* ---------- WebRTC: HOST SIDE ---------- */
+        function startHostSharing() {
+            var statusEl = document.getElementById('stream-status');
+            navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
+                localStream = stream;
+                statusEl.innerText = 'Sharing live - keep this tab open.';
+                stream.getVideoTracks()[0].addEventListener('ended', function () {
+                    statusEl.innerText = 'Sharing stopped. Click above to restart.';
+                });
+
+                roomRef.collection('streamPeers').onSnapshot(function (snap) {
+                    snap.docChanges().forEach(function (change) {
+                        if (change.type === 'added' && !hostPeerConnections[change.doc.id]) {
+                            connectToViewer(change.doc.id, change.doc.ref);
+                        }
+                    });
+                });
+            }).catch(function (e) {
+                console.error('getDisplayMedia failed', e);
+                statusEl.innerText = 'Could not start sharing - permission denied or cancelled.';
             });
-            if (prevBtn) prevBtn.addEventListener('click', function () {
-                if ((d.episode || 1) <= 1) return;
-                roomRef.update({ episode: d.episode - 1, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+
+        function connectToViewer(viewerUid, peerDocRef) {
+            var pc = new RTCPeerConnection(ICE_CONFIG);
+            hostPeerConnections[viewerUid] = pc;
+            localStream.getTracks().forEach(function (track) { pc.addTrack(track, localStream); });
+
+            pc.onicecandidate = function (e) {
+                if (e.candidate) peerDocRef.update({ hostCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) }).catch(function(){});
+            };
+
+            pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); }).then(function () {
+                return peerDocRef.update({ offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+            }).catch(function (e) { console.error('createOffer failed', e); });
+
+            var processedViewerCandidates = 0;
+            peerDocRef.onSnapshot(function (doc) {
+                var d = doc.data();
+                if (!d) return;
+                if (d.answer && !pc.currentRemoteDescription) {
+                    pc.setRemoteDescription(new RTCSessionDescription(d.answer)).catch(function (e) { console.error('setRemoteDescription (host) failed', e); });
+                }
+                var vCands = d.viewerCandidates || [];
+                for (var i = processedViewerCandidates; i < vCands.length; i++) {
+                    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(vCands[i]))).catch(function () {});
+                }
+                processedViewerCandidates = vCands.length;
+            });
+        }
+
+        /* ---------- WebRTC: VIEWER SIDE ---------- */
+        function joinAsStreamViewer(user) {
+            var peerDocRef = roomRef.collection('streamPeers').doc(user.uid);
+            peerDocRef.set({ joinedAt: firebase.firestore.FieldValue.serverTimestamp(), offer: null, answer: null, hostCandidates: [], viewerCandidates: [] }, { merge: true });
+
+            var pc = new RTCPeerConnection(ICE_CONFIG);
+            viewerPeerConnection = pc;
+            pc.ontrack = function (e) {
+                document.getElementById('stream-waiting').classList.add('hidden');
+                var video = document.getElementById('stream-viewer-video');
+                video.classList.remove('hidden');
+                video.srcObject = e.streams[0];
+                video.play().catch(function () {});
+            };
+            pc.onicecandidate = function (e) {
+                if (e.candidate) peerDocRef.update({ viewerCandidates: firebase.firestore.FieldValue.arrayUnion(JSON.stringify(e.candidate)) }).catch(function(){});
+            };
+
+            var processedHostCandidates = 0;
+            var answered = false;
+            peerDocRef.onSnapshot(function (doc) {
+                var d = doc.data();
+                if (!d) return;
+                if (d.offer && !answered) {
+                    answered = true;
+                    pc.setRemoteDescription(new RTCSessionDescription(d.offer)).then(function () {
+                        return pc.createAnswer();
+                    }).then(function (answer) {
+                        return pc.setLocalDescription(answer);
+                    }).then(function () {
+                        return peerDocRef.update({ answer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+                    }).catch(function (e) { console.error('viewer answer flow failed', e); });
+                }
+                var hCands = d.hostCandidates || [];
+                for (var i = processedHostCandidates; i < hCands.length; i++) {
+                    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(hCands[i]))).catch(function () {});
+                }
+                processedHostCandidates = hCands.length;
             });
         }
     </script>

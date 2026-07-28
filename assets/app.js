@@ -828,11 +828,41 @@ App._wireNotificationBell = function () {
 
 /* ---------- "CURRENTLY WATCHING" PRESENCE (lightweight, no backend needed) ---------- */
 /* ---------- WATCH TOGETHER ---------- */
-App.createWatchParty = function () {
+App.showWatchTogetherChoice = function () {
+    if (!App.requireAuth() || !App.currentItemData) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'wt-choice-overlay';
+    overlay.className = 'fixed inset-0 z-[1500] bg-black/80 flex items-center justify-center p-4';
+    overlay.innerHTML =
+        '<div class="bg-white dark:bg-black border border-black/10 dark:border-white/10 rounded-2xl p-6 max-w-lg w-full">' +
+            '<h2 class="text-xl font-black text-black dark:text-white mb-1">Watch Together</h2>' +
+            '<p class="text-sm text-zinc-500 mb-5">Choose how you want to watch with friends.</p>' +
+            '<div class="flex flex-col gap-3">' +
+                '<button id="wt-choice-room" class="text-left p-4 rounded-xl border border-black/10 dark:border-white/10 hover:border-primary transition-colors">' +
+                    '<span class="block font-bold text-black dark:text-white">🔗 Watch Room</span>' +
+                    '<span class="block text-xs text-zinc-500 mt-1">Everyone plays it on their own device from the same starting point. Live chat and reactions. Most reliable.</span>' +
+                '</button>' +
+                '<button id="wt-choice-stream" class="text-left p-4 rounded-xl border border-black/10 dark:border-white/10 hover:border-primary transition-colors">' +
+                    '<span class="block font-bold text-black dark:text-white">📡 Live Stream (truly synced)</span>' +
+                    '<span class="block text-xs text-zinc-500 mt-1">You share your screen and everyone watches your exact stream in real time - genuinely frame-by-frame together. Quality depends on your internet upload speed, and you need to keep this tab open and shared.</span>' +
+                '</button>' +
+            '</div>' +
+            '<button id="wt-choice-cancel" class="mt-4 text-sm font-bold text-zinc-500 hover:text-black dark:hover:text-white">Cancel</button>' +
+        '</div>';
+    document.body.appendChild(overlay);
+
+    document.getElementById('wt-choice-cancel').addEventListener('click', function () { overlay.remove(); });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('wt-choice-room').addEventListener('click', function () { overlay.remove(); App.createWatchParty('room'); });
+    document.getElementById('wt-choice-stream').addEventListener('click', function () { overlay.remove(); App.createWatchParty('stream'); });
+};
+
+App.createWatchParty = function (mode) {
     if (!App.requireAuth() || !App.currentItemData) return;
     var roomId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     var hostName = (App.userData && App.userData.username) ? App.userData.username : App.Auth.currentUser.email;
     App._db.collection('watchParties').doc(roomId).set({
+        mode: mode,
         hostUid: App.Auth.currentUser.uid,
         hostName: hostName,
         itemId: App.currentItemData.id,

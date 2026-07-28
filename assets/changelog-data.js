@@ -5,8 +5,9 @@ window.CHANGELOG_ENTRIES = [
         date: '2026-07-28',
         title: 'Watch Together, and a real playback bug fixed',
         items: [
-            'New: Watch Together - start a private watch party and share a link, no sign-up needed for friends to join',
-            'Live chat and quick reactions inside each watch party',
+            'New: Watch Together now offers two modes - a synced Watch Room (chat + same starting point), or a true Live Stream where the host shares their screen and everyone watches the exact same feed in real time',
+            'Live chat and quick reactions inside every watch party',
+            'Fixed a bug where shared watch party links wouldn\'t open',
             'Fixed a real bug where resuming Continue Watching, or starting playback on a fresh title, could silently fail with no video and no server options showing'
         ]
     },
