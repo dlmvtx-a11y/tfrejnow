@@ -63,6 +63,23 @@ input[type="checkbox"].accent-primary { accent-color: #6d28d9; }
   40%, 60% { transform: translateX(8px); }
 }
 
+/* Video player container keeps a 16:9 box during normal playback, but that
+   same aspect-ratio constraint can otherwise get honored even inside
+   fullscreen mode in some browsers, leaving the video letterboxed instead of
+   truly filling the screen. Override it specifically for the fullscreen state. */
+#video-container:fullscreen,
+#video-container:-webkit-full-screen,
+#video-container:-moz-full-screen,
+#video-frame:fullscreen,
+#video-frame:-webkit-full-screen,
+#video-frame:-moz-full-screen {
+  aspect-ratio: unset !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
 @media (max-width: 640px) {
   body { font-size: 15px; }
 }
