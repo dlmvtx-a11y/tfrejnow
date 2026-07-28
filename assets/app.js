@@ -98,7 +98,9 @@ App.currentEpisode = 1;
 App.SERVERS = {
     server1: { name: 'Server 1 (Auto-Next)', movie: function(id){ return 'https://vidapi.qzz.io/movie/'+id+qzzParams; }, tv: function(id){ return 'https://vidapi.qzz.io/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode+qzzParams; } },
     server2: { name: 'Server 2', movie: function(id){ return 'https://vaplayer.ru/embed/movie/?tmdb='+id; }, tv: function(id){ return 'https://vaplayer.ru/embed/tv/?tmdb='+id+'&season='+App.currentSeason+'&episode='+App.currentEpisode; } },
-    server3: { name: 'Server 3', movie: function(id){ return 'https://vidapi.xyz/embed/movie/'+id; }, tv: function(id){ return 'https://vidapi.xyz/embed/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } }
+    server3: { name: 'Server 3', movie: function(id){ return 'https://vidapi.xyz/embed/movie/'+id; }, tv: function(id){ return 'https://vidapi.xyz/embed/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } },
+    server4: { name: 'Server 4', movie: function(id){ return 'https://vixsrc.to/movie/'+id; }, tv: function(id){ return 'https://vixsrc.to/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } },
+    server5: { name: 'Server 5 (Netflix-style)', movie: function(id){ return 'https://player.videasy.net/movie/'+id+'?color=6D28D9&overlay=true'; }, tv: function(id){ return 'https://player.videasy.net/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode+'?color=6D28D9&overlay=true&nextEpisode=true&autoplayNextEpisode=true&episodeSelector=true'; } }
 };
 App.currentServerKey = localStorage.getItem('tfrej_server') || 'server1';
 if (!App.SERVERS[App.currentServerKey]) App.currentServerKey = 'server1';

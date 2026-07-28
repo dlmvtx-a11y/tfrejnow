@@ -7,6 +7,7 @@ App.currentTrailerKey = null;
 App.initTitlePage = function () {
     App.renderNav(null);
     App.renderFooter();
+    App._wireVideasyProgressSync();
 
     var params = new URLSearchParams(location.search);
     var type = params.get('type');
@@ -250,6 +251,28 @@ App.renderServerTabs = function () {
         tabs.appendChild(btn);
     });
 };
+App._wireVideasyProgressSync = function () {
+    if (App._videasySyncWired) return;
+    App._videasySyncWired = true;
+    window.addEventListener('message', function (event) {
+        if (App.currentServerKey !== 'server5') return; // only trust this from the Videasy player
+        if (!App.currentItemData || typeof event.data !== 'string') return;
+        var data;
+        try { data = JSON.parse(event.data); } catch (e) { return; }
+        if (!data || String(data.id) !== String(App.currentItemData.id)) return;
+
+        if (App.currentMediaType === 'tv' && data.season && data.episode) {
+            var advanced = data.season !== App.currentSeason || data.episode !== App.currentEpisode;
+            App.currentSeason = data.season;
+            App.currentEpisode = data.episode;
+            App.saveProgress(App.currentItemData, 'tv', data.season, data.episode);
+            if (advanced && App.updateSeasonTabsVisual) App.updateSeasonTabsVisual();
+        } else if (App.currentMediaType === 'movie') {
+            App.saveProgress(App.currentItemData, 'movie', null, null);
+        }
+    });
+};
+
 App.changeServer = function () {
     if (!App.currentItemData || !App.currentMediaType) return;
     var iframe = document.getElementById('video-frame');
