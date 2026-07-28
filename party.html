@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=50">
+    <link rel="stylesheet" href="assets/style.css?v=52">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=50"></script>
-    <script src="assets/app.js?v=50"></script>
+    <script src="assets/firebase-config.js?v=52"></script>
+    <script src="assets/app.js?v=52"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -67,20 +67,20 @@
 
             <!-- Stream mode: WebRTC screen share -->
             <div id="stream-video-wrap" class="hidden relative w-full rounded-2xl bg-black aspect-video md:aspect-auto md:h-[550px] border border-white/10 shadow-2xl flex-col items-center justify-center overflow-hidden">
-                <video id="stream-viewer-video" class="hidden w-full h-full object-contain bg-black" autoplay playsinline></video>
-                <div id="stream-host-panel" class="hidden flex-col items-center justify-center gap-4 p-4 text-center w-full h-full">
-                    <div id="stream-host-idle" class="flex flex-col items-center gap-4">
-                        <p class="text-zinc-400 text-sm max-w-sm">Click below and choose this browser tab (with audio) to start streaming it live to everyone in the party.</p>
-                        <button id="start-share-btn" class="bg-primary hover:bg-primary/80 px-6 py-3 rounded-xl font-bold">📡 Start Sharing This Tab</button>
+                <video id="stream-viewer-video" class="hidden w-full h-full object-contain bg-black" playsinline></video>
+                <div id="stream-host-panel" class="hidden flex-col w-full h-full">
+                    <div class="relative flex-1 w-full bg-black">
+                        <iframe id="host-vod-frame" class="w-full h-full absolute inset-0 bg-black" src="" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
                     </div>
-                    <div id="stream-host-active" class="hidden flex-col items-center gap-3 w-full h-full">
-                        <video id="host-preview-video" class="w-full h-full object-contain bg-black rounded-lg" autoplay muted playsinline></video>
-                        <div class="flex items-center gap-2">
-                            <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>
-                            <span class="text-xs text-zinc-400 font-bold">LIVE - this is what everyone else sees</span>
-                        </div>
+                    <div id="stream-host-idle" class="flex-shrink-0 flex flex-col items-center gap-2 p-3 bg-black/80 text-center">
+                        <p class="text-zinc-400 text-xs max-w-sm">Once the video above is playing, click below and choose <strong class="text-white">"This Tab"</strong> (with audio) to broadcast it live.</p>
+                        <button id="start-share-btn" class="bg-primary hover:bg-primary/80 px-6 py-2.5 rounded-xl font-bold text-sm">📡 Start Sharing This Tab</button>
                     </div>
-                    <p id="stream-status" class="text-xs text-zinc-500"></p>
+                    <div id="stream-host-active" class="hidden flex-shrink-0 items-center justify-center gap-2 p-2 bg-black/80">
+                        <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span></span>
+                        <span class="text-xs text-zinc-400 font-bold">LIVE - broadcasting the video above</span>
+                    </div>
+                    <p id="stream-status" class="flex-shrink-0 text-[10px] text-zinc-500 px-3 pb-2 bg-black/80 text-center"></p>
                 </div>
                 <div id="stream-waiting" class="hidden flex-col items-center gap-3 p-6 text-center">
                     <div class="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -252,17 +252,19 @@
                 roomData = d;
                 document.getElementById('room-title').innerText = d.title;
                 document.getElementById('room-subtitle').innerText = 'Hosted by ' + d.hostName +
-                    (isStreamMode ? ' · Live Stream' : (d.mediaType === 'tv' ? ' · Season ' + d.season + ', Episode ' + d.episode : ''));
+                    (isStreamMode ? ' · Live Stream' : '') +
+                    (d.mediaType === 'tv' ? ' · Season ' + d.season + ', Episode ' + d.episode : '');
 
-                if (!isStreamMode) {
+                if (!isStreamMode || isHost) {
                     var url = App.SERVERS[d.serverKey] ? App.SERVERS[d.serverKey][d.mediaType === 'tv' ? 'tv' : 'movie'] : null;
-                    var frame = document.getElementById('party-video-frame');
-                    if (url) {
+                    var frameId = isStreamMode ? 'host-vod-frame' : 'party-video-frame';
+                    var frame = document.getElementById(frameId);
+                    if (url && frame) {
                         var newSrc = url(d.itemId);
                         if (frame.src !== newSrc) frame.src = newSrc;
                     }
-                    if (isHost) renderHostControls(d);
                 }
+                if (isHost) renderHostControls(d);
             });
 
             roomRef.collection('members').onSnapshot(function (snap) {
@@ -343,9 +345,6 @@
             }
             navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
                 localStream = stream;
-                var previewVideo = document.getElementById('host-preview-video');
-                previewVideo.srcObject = stream;
-                previewVideo.play().catch(function () {});
                 document.getElementById('stream-host-idle').classList.add('hidden');
                 document.getElementById('stream-host-active').classList.remove('hidden');
                 document.getElementById('stream-host-active').classList.add('flex');
