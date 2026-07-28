@@ -255,7 +255,7 @@ App._wireVideasyProgressSync = function () {
     if (App._videasySyncWired) return;
     App._videasySyncWired = true;
     window.addEventListener('message', function (event) {
-        if (App.currentServerKey !== 'server5') return; // only trust this from the Videasy player
+        if (App.currentServerKey !== 'server1') return; // only trust this from the Videasy player
         if (!App.currentItemData || typeof event.data !== 'string') return;
         var data;
         try { data = JSON.parse(event.data); } catch (e) { return; }

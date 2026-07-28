@@ -96,11 +96,11 @@ var qzzParams = '?primaryColor=6d28d9&secondaryColor=a2a2a2&iconColor=eefdec&ico
 App.currentSeason = 1;
 App.currentEpisode = 1;
 App.SERVERS = {
-    server1: { name: 'Server 1 (Auto-Next)', movie: function(id){ return 'https://vidapi.qzz.io/movie/'+id+qzzParams; }, tv: function(id){ return 'https://vidapi.qzz.io/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode+qzzParams; } },
+    server1: { name: 'Server 1', movie: function(id){ return 'https://player.videasy.net/movie/'+id+'?color=6D28D9&overlay=true'; }, tv: function(id){ return 'https://player.videasy.net/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode+'?color=6D28D9&overlay=true&nextEpisode=true&autoplayNextEpisode=true&episodeSelector=true'; } },
     server2: { name: 'Server 2', movie: function(id){ return 'https://vaplayer.ru/embed/movie/?tmdb='+id; }, tv: function(id){ return 'https://vaplayer.ru/embed/tv/?tmdb='+id+'&season='+App.currentSeason+'&episode='+App.currentEpisode; } },
-    server3: { name: 'Server 3', movie: function(id){ return 'https://vidapi.xyz/embed/movie/'+id; }, tv: function(id){ return 'https://vidapi.xyz/embed/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } },
-    server4: { name: 'Server 4', movie: function(id){ return 'https://vixsrc.to/movie/'+id; }, tv: function(id){ return 'https://vixsrc.to/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } },
-    server5: { name: 'Server 5 (Netflix-style)', movie: function(id){ return 'https://player.videasy.net/movie/'+id+'?color=6D28D9&overlay=true'; }, tv: function(id){ return 'https://player.videasy.net/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode+'?color=6D28D9&overlay=true&nextEpisode=true&autoplayNextEpisode=true&episodeSelector=true'; } }
+    server3: { name: 'Server 3', movie: function(id){ return 'https://vidapi.qzz.io/movie/'+id+qzzParams; }, tv: function(id){ return 'https://vidapi.qzz.io/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode+qzzParams; } },
+    server4: { name: 'Server 4', movie: function(id){ return 'https://vidapi.xyz/embed/movie/'+id; }, tv: function(id){ return 'https://vidapi.xyz/embed/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } },
+    server5: { name: 'Server 5', movie: function(id){ return 'https://vixsrc.to/movie/'+id; }, tv: function(id){ return 'https://vixsrc.to/tv/'+id+'/'+App.currentSeason+'/'+App.currentEpisode; } }
 };
 App.currentServerKey = localStorage.getItem('tfrej_server') || 'server1';
 if (!App.SERVERS[App.currentServerKey]) App.currentServerKey = 'server1';
@@ -1098,6 +1098,7 @@ App.renderAuthNav = function () {
             (otherProfiles.length ? '<p class="px-3 pt-1 pb-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Switch Profile</p>' + switchItemsHtml + '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' : '') +
             '<a href="profiles.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">🔀 Manage Profiles</a>' +
             '<a href="profile.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">⚙️ Account Settings</a>' +
+            '<a href="changelog.html" class="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-black dark:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-lg">📋 Updates</a>' +
             '<div class="border-t border-black/10 dark:border-white/10 my-1.5"></div>' +
             '<button onclick="App.signOutUser()" class="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-lg text-left">🚪 Sign Out</button>';
 
@@ -1122,6 +1123,7 @@ App.renderAuthNav = function () {
                 }).join('') +
                 '<a href="profiles.html" class="block px-6 py-3 text-xs font-bold text-primary hover:bg-black/5 dark:hover:bg-white/10">🔀 Manage Profiles</a>' +
                 '<a href="profile.html" class="block px-6 py-3 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10">⚙️ Account Settings</a>' +
+                '<a href="changelog.html" class="block px-6 py-3 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/10">📋 Updates</a>' +
                 '<button onclick="App.signOutUser()" class="w-full text-left px-6 py-3.5 text-sm font-bold text-red-500 hover:bg-red-500/10 border-t border-black/5 dark:border-white/5">🚪 Sign Out</button>';
         }
 
