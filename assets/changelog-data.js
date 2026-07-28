@@ -6,7 +6,7 @@ window.CHANGELOG_ENTRIES = [
         title: 'Server lineup refresh & smoother playback',
         items: [
             'Reordered servers and added two new ones (5 total) for better reliability',
-            'Working on a fullscreen issue with one of the players',
+            'Fixed a fullscreen issue with one of the players',
             'Continue Watching now stays accurate automatically on supported servers, even when an episode auto-advances',
             'Added this Updates page so changes are easy to follow'
         ]
