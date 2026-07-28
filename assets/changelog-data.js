@@ -6,6 +6,8 @@ window.CHANGELOG_ENTRIES = [
         title: 'Watch Together, and a real playback bug fixed',
         items: [
             'New: Watch Together now offers two modes - a synced Watch Room (chat + same starting point), or a true Live Stream where the host shares their screen and everyone watches the exact same feed in real time',
+            'Live Stream mode now actually works end-to-end - fixed several real connection bugs along the way, including a duplicate connection handler and missing error visibility that made problems hard to diagnose',
+            'Hosts can now see a live preview of exactly what they\'re sharing, instead of just a text status with nothing to look at',
             'Live chat and quick reactions inside every watch party',
             'Fixed the host\'s screen-sharing button staying visible and confusing even after sharing had actually started',
             'Leaving a watch party now takes you back where you came from, and notifies everyone else if the host leaves',

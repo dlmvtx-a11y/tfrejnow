@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=49">
+    <link rel="stylesheet" href="assets/style.css?v=50">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=49"></script>
-    <script src="assets/app.js?v=49"></script>
+    <script src="assets/firebase-config.js?v=50"></script>
+    <script src="assets/app.js?v=50"></script>
 </head>
 <body class="min-h-screen bg-background text-white antialiased overflow-x-hidden flex flex-col">
     <div id="loading-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -68,13 +68,17 @@
             <!-- Stream mode: WebRTC screen share -->
             <div id="stream-video-wrap" class="hidden relative w-full rounded-2xl bg-black aspect-video md:aspect-auto md:h-[550px] border border-white/10 shadow-2xl flex-col items-center justify-center overflow-hidden">
                 <video id="stream-viewer-video" class="hidden w-full h-full object-contain bg-black" autoplay playsinline></video>
-                <div id="stream-host-panel" class="hidden flex-col items-center gap-4 p-6 text-center">
+                <div id="stream-host-panel" class="hidden flex-col items-center justify-center gap-4 p-4 text-center w-full h-full">
                     <div id="stream-host-idle" class="flex flex-col items-center gap-4">
                         <p class="text-zinc-400 text-sm max-w-sm">Click below and choose this browser tab (with audio) to start streaming it live to everyone in the party.</p>
                         <button id="start-share-btn" class="bg-primary hover:bg-primary/80 px-6 py-3 rounded-xl font-bold">📡 Start Sharing This Tab</button>
                     </div>
-                    <div id="stream-host-active" class="hidden flex-col items-center gap-2">
-                        <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>
+                    <div id="stream-host-active" class="hidden flex-col items-center gap-3 w-full h-full">
+                        <video id="host-preview-video" class="w-full h-full object-contain bg-black rounded-lg" autoplay muted playsinline></video>
+                        <div class="flex items-center gap-2">
+                            <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>
+                            <span class="text-xs text-zinc-400 font-bold">LIVE - this is what everyone else sees</span>
+                        </div>
                     </div>
                     <p id="stream-status" class="text-xs text-zinc-500"></p>
                 </div>
@@ -339,6 +343,9 @@
             }
             navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
                 localStream = stream;
+                var previewVideo = document.getElementById('host-preview-video');
+                previewVideo.srcObject = stream;
+                previewVideo.play().catch(function () {});
                 document.getElementById('stream-host-idle').classList.add('hidden');
                 document.getElementById('stream-host-active').classList.remove('hidden');
                 document.getElementById('stream-host-active').classList.add('flex');
