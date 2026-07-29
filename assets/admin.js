@@ -329,6 +329,26 @@ App._wireBulkSelection = function () {
             .catch(function (e) { console.error(e); App.showToast('Some unbans may have failed - check console.'); })
             .finally(function () { unbanBtn.disabled = false; });
     });
+
+    var bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    if (bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', function () {
+        var ids = Object.keys(App._selectedUserIds).filter(function (id) { return App._selectedUserIds[id]; });
+        if (!ids.length) return;
+        if (!confirm('Permanently delete ' + ids.length + ' selected account(s)? This cannot be undone.')) return;
+        bulkDeleteBtn.disabled = true;
+        var targets = ids.map(function (id) {
+            var u = App._allUsers.filter(function (x) { return x.id === id; })[0];
+            return { id: id, email: u ? u.email : null };
+        });
+        Promise.all(targets.map(function (t) { return App.adminDeleteAccountEntirely(t.id, t.email); }))
+            .then(function () {
+                App.showToast(ids.length + ' account(s) permanently deleted');
+                App._selectedUserIds = {};
+                App._loadAdminUsers();
+            })
+            .catch(function (e) { console.error(e); App.showToast('Some deletions may have failed - check console.'); })
+            .finally(function () { bulkDeleteBtn.disabled = false; });
+    });
 };
 
 App.exportUsersCsv = function () {

@@ -5,6 +5,8 @@ window.CHANGELOG_ENTRIES = [
         date: '2026-07-28',
         title: 'Watch Together, and a real playback bug fixed',
         items: [
+            'Fixed a real bug where guests joining a watch party could end up with a blank "ghost" account showing in the admin user list',
+            'Admin can now bulk-delete selected accounts, not just ban/unban them',
             'New: Help & Guide page - how to block ads for a smoother experience, and everything about the site in one place',
             'New: Watch Together now offers two modes - a synced Watch Room (chat + same starting point), or a true Live Stream where the host shares their screen and everyone watches the exact same feed in real time',
             'Live Stream mode now actually works end-to-end - fixed several real connection bugs along the way, including a duplicate connection handler and missing error visibility that made problems hard to diagnose',

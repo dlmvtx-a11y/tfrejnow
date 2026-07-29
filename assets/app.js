@@ -328,6 +328,16 @@ App.gateSiteAccess = function () {
             location.href = 'login.html?return=' + returnTo;
             return;
         }
+        if (user.isAnonymous) {
+            // Anonymous sessions only exist for joining watch parties as a guest -
+            // they should never be treated as a real site account. Without this
+            // check, a guest navigating to a normal page after leaving a party
+            // would silently get a blank account auto-created for them.
+            firebase.auth().signOut().finally(function () {
+                location.href = 'login.html';
+            });
+            return;
+        }
         App._db.collection('deletedAccounts').doc(user.uid).get().then(function (tombstone) {
             if (tombstone.exists) {
                 firebase.auth().signOut().finally(function () {
