@@ -235,6 +235,10 @@ App.startWatching = function () {
         App.renderServerTabs();
         App.changeServer();
         App.updatePresence(App.currentItemData, App.currentMediaType);
+        App.enableMiniPlayer('video-container', function () {
+            var frame = document.getElementById('video-frame');
+            return !!(frame && frame.src);
+        });
     } catch (err) {
         console.error('startWatching failed - real error below:', err);
         App.showToast('Something went wrong starting playback. Check the console for details.');

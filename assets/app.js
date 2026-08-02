@@ -892,6 +892,66 @@ App.createWatchParty = function (mode) {
     });
 };
 
+/* ---------- MINI PLAYER (floating corner box on scroll-away, YouTube-style) ---------- */
+App.enableMiniPlayer = function (containerId, isPlayingFn) {
+    var container = document.getElementById(containerId);
+    if (!container || !('IntersectionObserver' in window)) return;
+    if (container._miniPlayerWired) return;
+    container._miniPlayerWired = true;
+
+    var placeholder = document.createElement('div');
+    placeholder.style.display = 'none';
+    var isMini = false;
+
+    var controls = document.createElement('div');
+    controls.className = 'mini-player-controls';
+    controls.innerHTML =
+        '<button aria-label="Back to full view" title="Back to full view">⤢</button>' +
+        '<button aria-label="Close mini player" title="Close">✕</button>';
+    controls.style.display = 'none';
+    container.style.position = container.style.position || 'relative';
+    container.appendChild(controls);
+
+    var restoreBtn = controls.children[0];
+    var closeBtn = controls.children[1];
+
+    restoreBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    closeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        exitMiniMode();
+        observer.unobserve(container);
+        App.showToast('Mini player closed. Scroll back to the player to resume it.');
+    });
+
+    function enterMiniMode() {
+        if (isMini) return;
+        isMini = true;
+        placeholder.style.height = container.offsetHeight + 'px';
+        placeholder.style.display = 'block';
+        container.parentNode.insertBefore(placeholder, container);
+        container.classList.add('mini-player-active');
+        controls.style.display = 'flex';
+    }
+    function exitMiniMode() {
+        if (!isMini) return;
+        isMini = false;
+        container.classList.remove('mini-player-active');
+        placeholder.style.display = 'none';
+        controls.style.display = 'none';
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+        var entry = entries[0];
+        var playing = !isPlayingFn || isPlayingFn();
+        if (!entry.isIntersecting && playing) enterMiniMode();
+        else if (entry.isIntersecting) exitMiniMode();
+    }, { threshold: 0 });
+    observer.observe(container);
+};
+
 App.updatePresence = function (item, mediaType) {
     if (!App.Auth.currentUser || !App._db) return;
     var name = (App.userData && App.userData.username) ? App.userData.username : App.Auth.currentUser.email;

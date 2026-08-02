@@ -3,6 +3,15 @@
 window.CHANGELOG_ENTRIES = [
     {
         date: '2026-07-30',
+        title: 'Mini player - keep watching while you browse',
+        items: [
+            'New: playback now follows you as a small floating window in the corner when you scroll away from the player, on both Live TV and Movies/TV/Anime - just like a YouTube-style mini player',
+            'Click the expand icon on the mini player to jump back to the full view, or the X to close it',
+            'Radio already worked this way - the bottom player bar was always there regardless of scrolling'
+        ]
+    },
+    {
+        date: '2026-07-30',
         title: 'Live TV & Radio redesign, and a real search bug fixed',
         items: [
             'Fixed the actual bug behind broken search and filters - a scoping mistake meant every filter click was silently crashing',
