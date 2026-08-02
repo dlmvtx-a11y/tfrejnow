@@ -893,6 +893,94 @@ App.createWatchParty = function (mode) {
 };
 
 /* ---------- MINI PLAYER (floating corner box on scroll-away, YouTube-style) ---------- */
+/* ---------- GLOBAL RADIO PLAYER (survives navigation across the whole site) ---------- */
+App.initGlobalRadioPlayer = function () {
+    if (document.getElementById('global-radio-bar')) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'global-radio-bar';
+    bar.className = 'hidden fixed bottom-0 left-0 right-0 z-[200] bg-black/95 backdrop-blur-md border-t border-white/10 px-4 py-3 items-center gap-4';
+    bar.innerHTML =
+        '<img id="grp-favicon" src="" class="w-10 h-10 rounded-lg bg-white/10 object-cover flex-shrink-0" onerror="this.style.display=\'none\'">' +
+        '<div class="min-w-0 flex-1"><p id="grp-name" class="text-sm font-bold text-white truncate"></p><p id="grp-status" class="text-xs text-zinc-500">Loading...</p></div>' +
+        '<button id="grp-playpause" class="w-10 h-10 flex-shrink-0 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center text-white">' +
+            '<svg id="grp-play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>' +
+            '<svg id="grp-pause-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="hidden"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>' +
+        '</button>' +
+        '<input id="grp-volume" type="range" min="0" max="1" step="0.05" value="1" class="w-20 accent-primary hidden sm:block">' +
+        '<button id="grp-close" class="w-8 h-8 flex-shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400" aria-label="Close player">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+        '</button>' +
+        '<audio id="grp-audio" class="hidden"></audio>';
+    document.body.appendChild(bar);
+
+    var audio = document.getElementById('grp-audio');
+
+    function setUiState(name, favicon, status) {
+        bar.classList.remove('hidden'); bar.classList.add('flex');
+        document.getElementById('grp-name').innerText = name;
+        document.getElementById('grp-status').innerText = status;
+        document.getElementById('grp-favicon').src = favicon || '';
+        document.getElementById('grp-favicon').style.display = favicon ? '' : 'none';
+    }
+
+    App.playRadioStation = function (name, url, favicon) {
+        if (!url) { App.showToast('This station has no playable stream.'); return; }
+        setUiState(name, favicon, 'Loading...');
+        audio.src = url;
+        audio.play().then(function () {
+            document.getElementById('grp-status').innerText = 'Playing live';
+            document.getElementById('grp-play-icon').classList.add('hidden');
+            document.getElementById('grp-pause-icon').classList.remove('hidden');
+        }).catch(function (e) {
+            console.error('Radio playback failed', e);
+            document.getElementById('grp-status').innerText = 'Could not play this station - try another.';
+        });
+
+        localStorage.setItem('tfrej_radio_station', JSON.stringify({ name: name, url: url, favicon: favicon || '' }));
+
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: name, artist: 'TfrejNOW Radio',
+                artwork: favicon ? [{ src: favicon, sizes: '512x512', type: 'image/png' }] : []
+            });
+            navigator.mediaSession.setActionHandler('play', function () { audio.play(); });
+            navigator.mediaSession.setActionHandler('pause', function () { audio.pause(); });
+            navigator.mediaSession.playbackState = 'playing';
+        }
+    };
+
+    document.getElementById('grp-playpause').addEventListener('click', function () {
+        if (audio.paused) {
+            audio.play().catch(function () {});
+            document.getElementById('grp-play-icon').classList.add('hidden');
+            document.getElementById('grp-pause-icon').classList.remove('hidden');
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        } else {
+            audio.pause();
+            document.getElementById('grp-play-icon').classList.remove('hidden');
+            document.getElementById('grp-pause-icon').classList.add('hidden');
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+        }
+    });
+    document.getElementById('grp-volume').addEventListener('input', function (e) { audio.volume = parseFloat(e.target.value); });
+    document.getElementById('grp-close').addEventListener('click', function () {
+        audio.pause(); audio.src = '';
+        bar.classList.add('hidden'); bar.classList.remove('flex');
+        localStorage.removeItem('tfrej_radio_station');
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+    });
+    audio.addEventListener('error', function () { document.getElementById('grp-status').innerText = 'Stream error - try another station.'; });
+
+    var saved = localStorage.getItem('tfrej_radio_station');
+    if (saved) {
+        try {
+            var s = JSON.parse(saved);
+            App.playRadioStation(s.name, s.url, s.favicon);
+        } catch (e) {}
+    }
+};
+
 App.enableMiniPlayer = function (containerId, isPlayingFn) {
     var container = document.getElementById(containerId);
     if (!container || !('IntersectionObserver' in window)) return;
@@ -945,10 +1033,13 @@ App.enableMiniPlayer = function (containerId, isPlayingFn) {
 
     var observer = new IntersectionObserver(function (entries) {
         var entry = entries[0];
-        var playing = !isPlayingFn || isPlayingFn();
-        if (!entry.isIntersecting && playing) enterMiniMode();
-        else if (entry.isIntersecting) exitMiniMode();
-    }, { threshold: 0 });
+        clearTimeout(container._miniPlayerDebounce);
+        container._miniPlayerDebounce = setTimeout(function () {
+            var playing = !isPlayingFn || isPlayingFn();
+            if (!entry.isIntersecting && playing) enterMiniMode();
+            else if (entry.isIntersecting) exitMiniMode();
+        }, 180);
+    }, { threshold: 0, rootMargin: '-40px 0px -40px 0px' });
     observer.observe(container);
 };
 
@@ -1196,6 +1287,7 @@ App.renderAnnouncementBanner = function () {
 App.renderNav = function (activeHref) {
     App.injectPwaManifest();
     App.registerServiceWorker();
+    App.initGlobalRadioPlayer();
     var root = document.getElementById('nav-root');
     if (!root) return;
     root.innerHTML =
@@ -1485,7 +1577,7 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
 
         var title = item.title || item.name || 'Untitled';
         var isLiveType = mediaType === 'livetv' || mediaType === 'radio';
-        var posterPath = item.poster_path ? (App.IMG_BASE_URL + item.poster_path) : App.NO_POSTER;
+        var posterPath = item.poster_path ? (item.poster_path.indexOf('http') === 0 ? item.poster_path : App.IMG_BASE_URL + item.poster_path) : App.NO_POSTER;
         var year = (item.release_date || item.first_air_date || '').substring(0, 4);
         var rating = item.vote_average ? item.vote_average.toFixed(1) : null;
         var href;

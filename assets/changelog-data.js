@@ -3,6 +3,16 @@
 window.CHANGELOG_ENTRIES = [
     {
         date: '2026-07-30',
+        title: 'Radio now follows you around the site',
+        items: [
+            'New: Radio now keeps playing as you browse to other pages - not just while scrolling, but across the whole site, with lock-screen controls on mobile',
+            'Fixed a real bug causing the page to visibly shake/flicker when scrolling past a player - a feedback loop in the mini-player logic',
+            'Fixed missing channel/station logos in Recently Viewed and My List',
+            'Fixed Live TV and Radio history not showing correctly for admin - Most Watched was linking to the wrong page for these'
+        ]
+    },
+    {
+        date: '2026-07-30',
         title: 'Mini player - keep watching while you browse',
         items: [
             'New: playback now follows you as a small floating window in the corner when you scroll away from the player, on both Live TV and Movies/TV/Anime - just like a YouTube-style mini player',

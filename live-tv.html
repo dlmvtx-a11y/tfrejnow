@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=68">
+    <link rel="stylesheet" href="assets/style.css?v=69">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=68"></script>
-    <script src="assets/app.js?v=68"></script>
+    <script src="assets/firebase-config.js?v=69"></script>
+    <script src="assets/app.js?v=69"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
@@ -174,14 +174,14 @@
             var grid = document.getElementById('tv-grid');
             if (!channels.length) { grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-10 font-bold">No channels match your filters.</div>'; return; }
             grid.innerHTML = channels.map(function (c) {
-                return '<button class="channel-card poster-card text-left bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 p-3 flex flex-col items-center gap-2" data-id="' + c.id + '" data-name="' + c.name.replace(/"/g, '&quot;') + '">' +
+                return '<button class="channel-card poster-card text-left bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 p-3 flex flex-col items-center gap-2" data-id="' + c.id + '" data-name="' + c.name.replace(/"/g, '&quot;') + '" data-logo="' + (c.logo || '') + '">' +
                     (c.logo ? '<img src="' + c.logo + '" class="w-14 h-14 object-contain" onerror="this.style.display=\'none\'">' : '<div class="w-14 h-14 rounded-lg bg-primary/20 flex items-center justify-center text-2xl">📺</div>') +
                     '<p class="text-xs font-bold text-black dark:text-white text-center line-clamp-2">' + c.name + '</p>' +
                     '<p class="text-[10px] text-zinc-500 text-center">' + countryFlag(c.country) + ' ' + (c.country || '') + '</p>' +
                 '</button>';
             }).join('');
             grid.querySelectorAll('.channel-card').forEach(function (btn) {
-                btn.addEventListener('click', function () { playChannel(btn.getAttribute('data-id'), btn.getAttribute('data-name')); });
+                btn.addEventListener('click', function () { playChannel(btn.getAttribute('data-id'), btn.getAttribute('data-name'), btn.getAttribute('data-logo')); });
             });
         }
 
@@ -200,8 +200,8 @@
         var searchTimer2;
         document.getElementById('tv-search-input').addEventListener('input', function () { clearTimeout(searchTimer2); searchTimer2 = setTimeout(applyFilters, 350); });
 
-        function channelToItem(id, name) {
-            return { id: 'live_' + id, title: name, poster_path: null, genres: [] };
+        function channelToItem(id, name, logo) {
+            return { id: 'live_' + id, title: name, poster_path: logo || null, genres: [] };
         }
 
         function updateFavBtn(id) {
@@ -213,14 +213,14 @@
             btn.classList.toggle('text-white', isFav);
         }
 
-        function playChannel(id, name) {
+        function playChannel(id, name, logo) {
             var url = streamsByChannel[id];
             if (!url) { App.showToast('No playable stream for this channel.'); return; }
             document.getElementById('tv-player-section').classList.remove('hidden');
             document.getElementById('tv-player-status').innerText = 'Loading ' + name + '...';
             document.getElementById('tv-player-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            var item = channelToItem(id, name);
+            var item = channelToItem(id, name, logo);
             App.saveRecentlyViewed(item, 'livetv');
             App.logWatchEvent(item, 'livetv', null, null);
             var favBtn = document.getElementById('tv-fav-btn');

@@ -207,8 +207,10 @@ App._renderMostWatched = function (logs) {
     var el = document.getElementById('most-watched-list');
     if (!top.length) { el.innerHTML = '<p class="text-zinc-500 text-sm py-4">No watch activity yet.</p>'; return; }
     el.innerHTML = top.map(function (t, i) {
-        return '<a href="title.html?type=' + t.mediaType + '&id=' + t.itemId + '" class="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors">' +
-            '<span class="flex items-center gap-3 min-w-0"><span class="text-xs font-black text-primary w-5 flex-shrink-0">#' + (i + 1) + '</span><span class="text-sm font-bold text-black dark:text-white truncate">' + t.title + '</span></span>' +
+        var href = t.mediaType === 'livetv' ? 'live-tv.html' : (t.mediaType === 'radio' ? 'radio.html' : 'title.html?type=' + t.mediaType + '&id=' + t.itemId);
+        var icon = t.mediaType === 'livetv' ? '📺 ' : (t.mediaType === 'radio' ? '📻 ' : '');
+        return '<a href="' + href + '" class="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors">' +
+            '<span class="flex items-center gap-3 min-w-0"><span class="text-xs font-black text-primary w-5 flex-shrink-0">#' + (i + 1) + '</span><span class="text-sm font-bold text-black dark:text-white truncate">' + icon + t.title + '</span></span>' +
             '<span class="text-xs font-bold text-zinc-500 flex-shrink-0">' + t.count + ' views</span>' +
         '</a>';
     }).join('');
@@ -238,9 +240,10 @@ App._renderRecentActivity = function (logs) {
     if (!recent.length) { el.innerHTML = '<p class="text-zinc-500 text-sm py-4">No activity yet.</p>'; return; }
     el.innerHTML = recent.map(function (l) {
         var epText = l.mediaType === 'tv' && l.season ? ' · S' + l.season + ':E' + l.episode : '';
+        var icon = l.mediaType === 'livetv' ? '📺 ' : (l.mediaType === 'radio' ? '📻 ' : '');
         return '<div class="flex items-center justify-between py-2.5 px-3 border-b border-black/5 dark:border-white/5 last:border-0">' +
             '<div class="min-w-0"><p class="text-sm font-bold text-black dark:text-white truncate">' + (l.email || 'Unknown') + '</p>' +
-            '<p class="text-xs text-zinc-500 truncate">' + l.title + epText + '</p></div>' +
+            '<p class="text-xs text-zinc-500 truncate">' + icon + l.title + epText + '</p></div>' +
             '<span class="text-xs text-zinc-500 flex-shrink-0 ml-3">' + fmtDateTime(l.ts) + '</span>' +
         '</div>';
     }).join('');

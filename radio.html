@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=68">
+    <link rel="stylesheet" href="assets/style.css?v=69">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=68"></script>
-    <script src="assets/app.js?v=68"></script>
+    <script src="assets/firebase-config.js?v=69"></script>
+    <script src="assets/app.js?v=69"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -55,25 +55,6 @@
         </div>
     </section>
 
-    <!-- Persistent mini player -->
-    <div id="radio-player-bar" class="hidden fixed bottom-0 left-0 right-0 z-[200] bg-black/95 backdrop-blur-md border-t border-white/10 px-4 py-3 flex items-center gap-4">
-        <img id="player-favicon" src="" class="w-10 h-10 rounded-lg bg-white/10 object-cover flex-shrink-0" onerror="this.style.display='none'">
-        <div class="min-w-0 flex-1">
-            <p id="player-name" class="text-sm font-bold text-white truncate"></p>
-            <p id="player-status" class="text-xs text-zinc-500">Loading...</p>
-        </div>
-        <button id="player-fav-btn" class="w-9 h-9 flex-shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-lg" title="Add to My List">🤍</button>
-        <button id="player-playpause" class="w-10 h-10 flex-shrink-0 bg-primary hover:bg-primary/80 rounded-full flex items-center justify-center text-white">
-            <svg id="player-play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            <svg id="player-pause-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="hidden"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-        </button>
-        <input id="player-volume" type="range" min="0" max="1" step="0.05" value="1" class="w-20 accent-primary hidden sm:block">
-        <button id="player-close" class="w-8 h-8 flex-shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400" aria-label="Close player">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-        <audio id="radio-audio" class="hidden"></audio>
-    </div>
-
     <div id="footer-root"></div>
 
     <script>
@@ -88,7 +69,6 @@
         });
 
         var RADIO_API = 'https://de1.api.radio-browser.info/json/stations';
-        var audio = document.getElementById('radio-audio');
         var selectedCountry = '';
 
         function countryFlag(code) {
@@ -190,65 +170,16 @@
             }, 400);
         });
 
-        function stationToItem(name, url) {
-            return { id: 'radio_' + btoa(unescape(encodeURIComponent(url))).slice(0, 40), title: name, poster_path: null, genres: [] };
-        }
-
-        function updateRadioFavBtn(item) {
-            var btn = document.getElementById('player-fav-btn');
-            if (!btn) return;
-            var isFav = (App.userData.watchlist || []).some(function (w) { return String(w.id) === String(item.id); });
-            btn.innerText = isFav ? '❤️' : '🤍';
-            btn.title = isFav ? 'In My List' : 'Add to My List';
+        function stationToItem(name, url, favicon) {
+            return { id: 'radio_' + btoa(unescape(encodeURIComponent(url))).slice(0, 40), title: name, poster_path: favicon || null, genres: [] };
         }
 
         function playStation(name, url, favicon) {
-            if (!url) { App.showToast('This station has no playable stream.'); return; }
-            document.getElementById('radio-player-bar').classList.remove('hidden');
-            document.getElementById('radio-player-bar').classList.add('flex');
-            document.getElementById('player-name').innerText = name;
-            document.getElementById('player-status').innerText = 'Loading...';
-            document.getElementById('player-favicon').src = favicon || '';
-            document.getElementById('player-favicon').style.display = favicon ? '' : 'none';
-
-            var item = stationToItem(name, url);
+            var item = stationToItem(name, url, favicon);
             App.saveRecentlyViewed(item, 'radio');
             App.logWatchEvent(item, 'radio', null, null);
-            updateRadioFavBtn(item);
-            document.getElementById('player-fav-btn').onclick = function () {
-                App.toggleWatchlist(item, 'radio');
-                setTimeout(function () { updateRadioFavBtn(item); }, 0);
-            };
-
-            audio.src = url;
-            audio.play().then(function () {
-                document.getElementById('player-status').innerText = 'Playing live';
-                document.getElementById('player-play-icon').classList.add('hidden');
-                document.getElementById('player-pause-icon').classList.remove('hidden');
-            }).catch(function (e) {
-                console.error('Playback failed', e);
-                document.getElementById('player-status').innerText = 'Could not play this station - try another.';
-            });
+            App.playRadioStation(name, url, favicon);
         }
-
-        document.getElementById('player-playpause').addEventListener('click', function () {
-            if (audio.paused) {
-                audio.play().catch(function () {});
-                document.getElementById('player-play-icon').classList.add('hidden');
-                document.getElementById('player-pause-icon').classList.remove('hidden');
-            } else {
-                audio.pause();
-                document.getElementById('player-play-icon').classList.remove('hidden');
-                document.getElementById('player-pause-icon').classList.add('hidden');
-            }
-        });
-        document.getElementById('player-volume').addEventListener('input', function (e) { audio.volume = parseFloat(e.target.value); });
-        document.getElementById('player-close').addEventListener('click', function () {
-            audio.pause(); audio.src = '';
-            document.getElementById('radio-player-bar').classList.add('hidden');
-            document.getElementById('radio-player-bar').classList.remove('flex');
-        });
-        audio.addEventListener('error', function () { document.getElementById('player-status').innerText = 'Stream error - try another station.'; });
     </script>
 </body>
 </html>
