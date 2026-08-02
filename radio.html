@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=66">
+    <link rel="stylesheet" href="assets/style.css?v=67">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=66"></script>
-    <script src="assets/app.js?v=66"></script>
+    <script src="assets/firebase-config.js?v=67"></script>
+    <script src="assets/app.js?v=67"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
     <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
@@ -34,15 +34,25 @@
     <section class="relative z-10 min-h-screen pb-32 pt-24 md:pt-32 mx-auto max-w-[1800px] px-4 sm:px-6 md:px-10 lg:px-16 w-full flex-1">
         <h1 class="text-2xl md:text-4xl font-black text-black dark:text-white mb-6 border-l-4 border-primary pl-4">📻 Radio</h1>
 
-        <form id="radio-search-form" onsubmit="return false;" class="mx-auto mb-6 flex w-full max-w-[600px] flex-col gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-black/40 p-3 backdrop-blur-md shadow-xl">
-            <div class="flex flex-1 items-center gap-3 rounded-xl border border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 px-4 focus-within:border-primary/50 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5 text-zinc-500 dark:text-zinc-400"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.34-4.34"></path></svg>
-                <input id="radio-search-input" type="text" autocomplete="off" placeholder="Search stations by name..." class="h-12 w-full bg-transparent text-black dark:text-white outline-none placeholder:text-zinc-500">
-            </div>
-        </form>
+        <input id="radio-search-input" type="text" placeholder="Search by station or country..." class="h-11 w-full max-w-lg mb-6 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary">
 
-        <div id="radio-loading" class="text-center py-10 text-zinc-500 font-bold">Loading stations...</div>
-        <div id="radio-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"></div>
+        <div class="flex flex-col lg:flex-row gap-6 items-start">
+            <div class="flex-1 min-w-0 w-full order-2 lg:order-1">
+                <div id="radio-active-country-label" class="hidden mb-3 flex items-center gap-2">
+                    <span id="radio-active-country-text" class="text-sm font-bold text-black dark:text-white"></span>
+                    <button id="radio-clear-country-btn" class="text-xs font-bold text-primary hover:underline">Clear</button>
+                </div>
+                <div id="radio-loading" class="text-center py-10 text-zinc-500 font-bold">Loading stations...</div>
+                <div id="radio-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5"></div>
+            </div>
+
+            <div class="w-full lg:w-72 flex-shrink-0 order-1 lg:order-2 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-3">
+                <p class="text-xs font-black uppercase tracking-wider text-zinc-500 px-2 pt-1 pb-2">Browse by Country</p>
+                <div id="radio-country-sidebar" class="flex flex-col gap-0.5 max-h-[420px] overflow-y-auto custom-scrollbar">
+                    <p class="text-xs text-zinc-500 px-2 py-2">Loading countries...</p>
+                </div>
+            </div>
+        </div>
     </section>
 
     <!-- Persistent mini player -->
@@ -69,9 +79,57 @@
     <script>
         App.initFirebase();
         App.gateSiteAccess();
+        App.onAuthReady(function (user) {
+            if (!user) return;
+            App.renderNav('radio.html');
+            App.renderFooter();
+            loadCountries();
+            loadTopStations();
+        });
 
         var RADIO_API = 'https://de1.api.radio-browser.info/json/stations';
         var audio = document.getElementById('radio-audio');
+        var selectedCountry = '';
+
+        function countryFlag(code) {
+            if (!code || code.length !== 2) return '🏳️';
+            return String.fromCodePoint.apply(null, code.toUpperCase().split('').map(function (c) { return 127397 + c.charCodeAt(0); }));
+        }
+
+        function loadCountries() {
+            fetch('https://de1.api.radio-browser.info/json/countries')
+                .then(function (r) { return r.json(); })
+                .then(function (countries) {
+                    var sidebar = document.getElementById('radio-country-sidebar');
+                    var filtered = countries.filter(function (c) { return c.stationcount > 5 && c.iso_3166_1; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+                    sidebar.innerHTML = filtered.map(function (c) {
+                        return '<button class="country-row-btn text-left px-2 py-2 rounded-lg text-sm font-bold flex items-center justify-between gap-2 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-700 dark:text-zinc-300" data-code="' + c.iso_3166_1 + '" data-name="' + c.name.replace(/"/g, '&quot;') + '">' +
+                            '<span class="flex items-center gap-2 truncate"><span>' + countryFlag(c.iso_3166_1) + '</span><span class="truncate">' + c.name + '</span></span>' +
+                            '<span class="text-[10px] text-zinc-500 flex-shrink-0">' + c.stationcount + '</span>' +
+                        '</button>';
+                    }).join('');
+                    sidebar.querySelectorAll('.country-row-btn').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            selectedCountry = btn.getAttribute('data-code');
+                            sidebar.querySelectorAll('.country-row-btn').forEach(function (b) { b.classList.remove('bg-primary', 'text-white'); });
+                            btn.classList.add('bg-primary', 'text-white');
+                            document.getElementById('radio-active-country-label').classList.remove('hidden');
+                            document.getElementById('radio-active-country-label').classList.add('flex');
+                            document.getElementById('radio-active-country-text').innerText = countryFlag(selectedCountry) + ' ' + btn.getAttribute('data-name');
+                            document.getElementById('radio-search-input').value = '';
+                            loadStationsForCountry(selectedCountry);
+                        });
+                    });
+                    document.getElementById('radio-clear-country-btn').addEventListener('click', function () {
+                        selectedCountry = '';
+                        sidebar.querySelectorAll('.country-row-btn').forEach(function (b) { b.classList.remove('bg-primary', 'text-white'); });
+                        document.getElementById('radio-active-country-label').classList.add('hidden');
+                        document.getElementById('radio-active-country-label').classList.remove('flex');
+                        loadTopStations();
+                    });
+                })
+                .catch(function (e) { console.error('Failed to load countries', e); document.getElementById('radio-country-sidebar').innerHTML = '<p class="text-xs text-red-400 px-2 py-2">Failed to load countries.</p>'; });
+        }
 
         function renderStations(stations) {
             document.getElementById('radio-loading').classList.add('hidden');
@@ -82,7 +140,7 @@
                 return '<button class="station-card poster-card text-left bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 p-3 flex flex-col items-center gap-2" data-name="' + (s.name || '').replace(/"/g, '&quot;') + '" data-url="' + (s.url_resolved || s.url || '') + '" data-favicon="' + icon + '">' +
                     (icon ? '<img src="' + icon + '" class="w-14 h-14 rounded-lg object-cover bg-white/10" onerror="this.style.display=\'none\'">' : '<div class="w-14 h-14 rounded-lg bg-primary/20 flex items-center justify-center text-2xl">📻</div>') +
                     '<p class="text-xs font-bold text-black dark:text-white text-center line-clamp-2">' + (s.name || 'Unknown') + '</p>' +
-                    '<p class="text-[10px] text-zinc-500 text-center">' + (s.country || '') + '</p>' +
+                    '<p class="text-[10px] text-zinc-500 text-center">' + countryFlag(s.countrycode) + ' ' + (s.country || '') + '</p>' +
                 '</button>';
             }).join('');
             grid.querySelectorAll('.station-card').forEach(function (btn) {
@@ -98,18 +156,38 @@
                 .catch(function (e) { console.error('Failed to load stations', e); document.getElementById('radio-loading').innerText = 'Failed to load stations. Check the browser console for details.'; });
         }
 
+        function loadStationsForCountry(code) {
+            document.getElementById('radio-loading').classList.remove('hidden');
+            fetch(RADIO_API + '/search?countrycode=' + encodeURIComponent(code) + '&limit=100&order=clickcount&reverse=true&hidebroken=true')
+                .then(function (r) { return r.json(); })
+                .then(renderStations)
+                .catch(function (e) { console.error('Failed to load stations for country', e); });
+        }
+
         var searchTimer;
         document.getElementById('radio-search-input').addEventListener('input', function (e) {
             var q = e.target.value.trim();
             clearTimeout(searchTimer);
             searchTimer = setTimeout(function () {
-                if (!q) { loadTopStations(); return; }
+                if (!q) { if (selectedCountry) loadStationsForCountry(selectedCountry); else loadTopStations(); return; }
                 document.getElementById('radio-loading').classList.remove('hidden');
                 fetch(RADIO_API + '/search?name=' + encodeURIComponent(q) + '&limit=60&hidebroken=true')
                     .then(function (r) { return r.json(); })
-                    .then(renderStations)
+                    .then(function (byName) {
+                        fetch(RADIO_API + '/search?country=' + encodeURIComponent(q) + '&limit=60&hidebroken=true')
+                            .then(function (r) { return r.json(); })
+                            .then(function (byCountry) {
+                                var seen = {};
+                                var combined = byName.concat(byCountry).filter(function (s) {
+                                    if (seen[s.stationuuid]) return false;
+                                    seen[s.stationuuid] = true;
+                                    return true;
+                                });
+                                renderStations(combined);
+                            }).catch(function () { renderStations(byName); });
+                    })
                     .catch(function (e) { console.error('Search failed', e); });
-            }, 500);
+            }, 400);
         });
 
         function stationToItem(name, url) {
@@ -171,14 +249,6 @@
             document.getElementById('radio-player-bar').classList.remove('flex');
         });
         audio.addEventListener('error', function () { document.getElementById('player-status').innerText = 'Stream error - try another station.'; });
-
-        App.onAuthReady(function (user) {
-            if (user) {
-                App.renderNav('radio.html');
-                App.renderFooter();
-                loadTopStations();
-            }
-        });
     </script>
 </body>
 </html>

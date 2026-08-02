@@ -3,11 +3,19 @@
 window.CHANGELOG_ENTRIES = [
     {
         date: '2026-07-30',
+        title: 'Live TV & Radio redesign, and a real search bug fixed',
+        items: [
+            'Fixed the actual bug behind broken search and filters - a scoping mistake meant every filter click was silently crashing',
+            'Redesigned both pages to match TV Garden\'s layout - country list sidebar with flags on the right, category pills, unified search',
+            'Country list is now a proper scrollable A-Z sidebar instead of a broken dropdown',
+            'Fully responsive - the sidebar moves above the grid on mobile instead of breaking the layout'
+        ]
+    },
+    {
+        date: '2026-07-30',
         title: 'Live TV & Radio - real fixes',
         items: [
             'Fixed a real bug where the header and footer never showed up on Live TV or Radio at all',
-            'Replaced the broken filter dropdowns with proper country flags and category pills',
-            'Search on Live TV now matches channel names AND country names',
             'Live TV and Radio can now be added to My List, show up in Recently Viewed, and get logged like everything else on the site'
         ]
     },
@@ -15,7 +23,7 @@ window.CHANGELOG_ENTRIES = [
         date: '2026-07-30',
         title: 'Live TV & Radio',
         items: [
-            'New: 📺 Live TV - browse and watch free, publicly available channels from around the world, filterable by country and category',
+            'New: 📺 Live TV - browse and watch free, publicly available channels from around the world',
             'New: 📻 Radio - search and listen to internet radio stations with a persistent mini player',
             'Both added to the main navigation'
         ]
