@@ -1149,6 +1149,8 @@ App.renderNav = function (activeHref) {
                     navLink('movies.html', 'Movies', activeHref) +
                     navLink('tvshow.html', 'TV Shows', activeHref) +
                     navLink('anime.html', 'Anime', activeHref) +
+                    navLink('live-tv.html', 'Live TV', activeHref) +
+                    navLink('radio.html', 'Radio', activeHref) +
                     navLink('watchlist.html', 'My List', activeHref) +
                     navLink('continue-watching.html', 'Continue Watching', activeHref) +
                     '<span id="nav-admin-slot"></span>' +
@@ -1178,6 +1180,8 @@ App.renderNav = function (activeHref) {
                 mobileLink('movies.html', 'Movies', activeHref) +
                 mobileLink('tvshow.html', 'TV Shows', activeHref) +
                 mobileLink('anime.html', 'Anime', activeHref) +
+                mobileLink('live-tv.html', 'Live TV', activeHref) +
+                mobileLink('radio.html', 'Radio', activeHref) +
                 mobileLink('watchlist.html', 'My List', activeHref) +
                 mobileLink('continue-watching.html', 'Continue Watching', activeHref) +
                 '<div id="mobile-admin-slot"></div>' +

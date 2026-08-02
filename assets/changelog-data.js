@@ -2,6 +2,15 @@
 // each time a meaningful update ships.
 window.CHANGELOG_ENTRIES = [
     {
+        date: '2026-07-30',
+        title: 'Live TV & Radio',
+        items: [
+            'New: 📺 Live TV - browse and watch free, publicly available channels from around the world, filterable by country and category',
+            'New: 📻 Radio - search and listen to internet radio stations with a persistent mini player',
+            'Both added to the main navigation'
+        ]
+    },
+    {
         date: '2026-07-28',
         title: 'Watch Together, and a real playback bug fixed',
         items: [

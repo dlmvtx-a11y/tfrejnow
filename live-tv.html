@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Live TV - TfrejNOW</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236d28d9'/><text y='68' x='50' font-size='60' text-anchor='middle' fill='white'>🍿</text></svg>">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="theme-color" content="#6d28d9">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icons/icon-apple-touch.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/style.css?v=65">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="assets/firebase-config.js?v=65"></script>
+    <script src="assets/app.js?v=65"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+</head>
+<body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
+    <div id="auth-gate-overlay" class="fixed inset-0 z-[2000] bg-background flex flex-col items-center justify-center gap-5">
+        <div class="loading-logo-pulse text-3xl sm:text-4xl font-black tracking-tighter"><span class="text-white">Tfrej</span><span class="text-primary">NOW</span></div>
+        <div class="w-7 h-7 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-zinc-500 text-xs font-bold tracking-wide">Checking your session...</span>
+    </div>
+    <div class="fixed inset-0 bg-gradient-to-b from-lightbg/90 via-lightbg to-lightbg dark:from-black/80 dark:via-background/90 dark:to-background pointer-events-none"></div>
+    <div id="nav-root"></div>
+
+    <section class="relative z-10 min-h-screen pb-20 pt-24 md:pt-32 mx-auto max-w-[1800px] px-4 sm:px-6 md:px-10 lg:px-16 w-full flex-1">
+        <h1 class="text-2xl md:text-4xl font-black text-black dark:text-white mb-2 border-l-4 border-primary pl-4">📺 Live TV</h1>
+        <p class="text-xs text-zinc-500 mb-6 pl-4">Free, publicly available channels. Some may be geo-restricted or occasionally offline - try another if one doesn't load.</p>
+
+        <!-- Player -->
+        <div id="tv-player-section" class="hidden mb-8">
+            <div class="relative w-full rounded-2xl bg-black aspect-video md:h-[500px] md:aspect-auto border border-black/20 dark:border-white/10 shadow-2xl overflow-hidden flex items-center justify-center">
+                <video id="tv-video" class="w-full h-full" controls autoplay playsinline></video>
+            </div>
+            <p id="tv-player-status" class="text-xs text-zinc-500 mt-2"></p>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input id="tv-search-input" type="text" placeholder="Search channels..." class="h-11 flex-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary">
+            <select id="tv-country-select" class="h-11 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-3 text-black dark:text-white outline-none focus:border-primary">
+                <option value="">All Countries</option>
+            </select>
+            <select id="tv-category-select" class="h-11 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-3 text-black dark:text-white outline-none focus:border-primary">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+
+        <div id="tv-loading" class="text-center py-10 text-zinc-500 font-bold">Loading channels...</div>
+        <div id="tv-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"></div>
+    </section>
+
+    <div id="footer-root"></div>
+
+    <script>
+        App.initFirebase();
+        App.gateSiteAccess();
+
+        var API_BASE = 'https://iptv-org.github.io/api';
+        var allChannels = [], streamsByChannel = {}, allCountries = [], allCategories = [];
+        var hlsInstance = null;
+
+        Promise.all([
+            fetch(API_BASE + '/channels.json').then(function (r) { return r.json(); }),
+            fetch(API_BASE + '/streams.json').then(function (r) { return r.json(); }),
+            fetch(API_BASE + '/countries.json').then(function (r) { return r.json(); }),
+            fetch(API_BASE + '/categories.json').then(function (r) { return r.json(); })
+        ]).then(function (results) {
+            var rawStreams = results[1];
+            rawStreams.forEach(function (s) {
+                var baseId = (s.channel || '').split('@')[0];
+                if (baseId && !streamsByChannel[baseId]) streamsByChannel[baseId] = s.url;
+            });
+            allChannels = results[0].filter(function (c) { return !c.closed && !c.is_nsfw && streamsByChannel[c.id]; });
+            allCountries = results[2];
+            allCategories = results[3];
+
+            var countrySelect = document.getElementById('tv-country-select');
+            allCountries.sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c) {
+                countrySelect.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
+            });
+            var categorySelect = document.getElementById('tv-category-select');
+            allCategories.sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c) {
+                categorySelect.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>';
+            });
+
+            renderChannels(allChannels.slice(0, 90));
+        }).catch(function (e) {
+            console.error('Failed to load Live TV data', e);
+            document.getElementById('tv-loading').innerText = 'Failed to load channel list. Check the browser console for details.';
+        });
+
+        function renderChannels(channels) {
+            document.getElementById('tv-loading').classList.add('hidden');
+            var grid = document.getElementById('tv-grid');
+            if (!channels.length) { grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-10 font-bold">No channels match your filters.</div>'; return; }
+            grid.innerHTML = channels.map(function (c) {
+                return '<button class="channel-card poster-card text-left bg-black/5 dark:bg-black/40 rounded-xl overflow-hidden border border-black/10 dark:border-white/5 hover:border-primary/60 p-3 flex flex-col items-center gap-2" data-id="' + c.id + '" data-name="' + c.name.replace(/"/g, '&quot;') + '">' +
+                    (c.logo ? '<img src="' + c.logo + '" class="w-14 h-14 object-contain" onerror="this.style.display=\'none\'">' : '<div class="w-14 h-14 rounded-lg bg-primary/20 flex items-center justify-center text-2xl">📺</div>') +
+                    '<p class="text-xs font-bold text-black dark:text-white text-center line-clamp-2">' + c.name + '</p>' +
+                    '<p class="text-[10px] text-zinc-500 text-center">' + (c.country || '') + '</p>' +
+                '</button>';
+            }).join('');
+            grid.querySelectorAll('.channel-card').forEach(function (btn) {
+                btn.addEventListener('click', function () { playChannel(btn.getAttribute('data-id'), btn.getAttribute('data-name')); });
+            });
+        }
+
+        function applyFilters() {
+            var q = document.getElementById('tv-search-input').value.trim().toLowerCase();
+            var country = document.getElementById('tv-country-select').value;
+            var category = document.getElementById('tv-category-select').value;
+            var filtered = allChannels.filter(function (c) {
+                if (q && c.name.toLowerCase().indexOf(q) === -1) return false;
+                if (country && c.country !== country) return false;
+                if (category && (c.categories || []).indexOf(category) === -1) return false;
+                return true;
+            });
+            renderChannels(filtered.slice(0, 120));
+        }
+
+        var searchTimer2;
+        document.getElementById('tv-search-input').addEventListener('input', function () { clearTimeout(searchTimer2); searchTimer2 = setTimeout(applyFilters, 400); });
+        document.getElementById('tv-country-select').addEventListener('change', applyFilters);
+        document.getElementById('tv-category-select').addEventListener('change', applyFilters);
+
+        function playChannel(id, name) {
+            var url = streamsByChannel[id];
+            if (!url) { App.showToast('No playable stream for this channel.'); return; }
+            document.getElementById('tv-player-section').classList.remove('hidden');
+            document.getElementById('tv-player-status').innerText = 'Loading ' + name + '...';
+            document.getElementById('tv-player-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            var video = document.getElementById('tv-video');
+            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+            if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari has native HLS support
+                video.src = url;
+                video.play().catch(function () {});
+                document.getElementById('tv-player-status').innerText = 'Playing ' + name;
+            } else if (window.Hls && Hls.isSupported()) {
+                hlsInstance = new Hls();
+                hlsInstance.loadSource(url);
+                hlsInstance.attachMedia(video);
+                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play().catch(function () {});
+                    document.getElementById('tv-player-status').innerText = 'Playing ' + name;
+                });
+                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        console.error('HLS fatal error for', name, data);
+                        document.getElementById('tv-player-status').innerText = 'This channel failed to load - try another one.';
+                    }
+                });
+            } else {
+                document.getElementById('tv-player-status').innerText = 'Live streaming isn\'t supported in this browser.';
+            }
+        }
+    </script>
+</body>
+</html>
