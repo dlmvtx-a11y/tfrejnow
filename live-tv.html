@@ -15,12 +15,12 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: '#6d28d9', background: '#09090b', lightbg: '#f1f5f9' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/style.css?v=65">
+    <link rel="stylesheet" href="assets/style.css?v=66">
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="assets/firebase-config.js?v=65"></script>
-    <script src="assets/app.js?v=65"></script>
+    <script src="assets/firebase-config.js?v=66"></script>
+    <script src="assets/app.js?v=66"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
 </head>
 <body class="min-h-screen bg-lightbg text-zinc-900 dark:bg-background dark:text-white antialiased overflow-x-hidden flex flex-col">
@@ -42,17 +42,28 @@
                 <video id="tv-video" class="w-full h-full" controls autoplay playsinline></video>
             </div>
             <p id="tv-player-status" class="text-xs text-zinc-500 mt-2"></p>
+            <div id="tv-fav-toggle-wrap" class="hidden mt-2">
+                <button id="tv-fav-btn" class="text-xs font-bold px-4 py-2 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black dark:text-white">🤍 Add to My List</button>
+            </div>
         </div>
 
-        <!-- Filters -->
-        <div class="flex flex-col sm:flex-row gap-3 mb-6">
-            <input id="tv-search-input" type="text" placeholder="Search channels..." class="h-11 flex-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary">
-            <select id="tv-country-select" class="h-11 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-3 text-black dark:text-white outline-none focus:border-primary">
-                <option value="">All Countries</option>
-            </select>
-            <select id="tv-category-select" class="h-11 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-3 text-black dark:text-white outline-none focus:border-primary">
-                <option value="">All Categories</option>
-            </select>
+        <!-- Search -->
+        <div class="mb-4">
+            <input id="tv-search-input" type="text" placeholder="Search by channel or country..." class="h-11 w-full max-w-lg bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 text-black dark:text-white outline-none focus:border-primary">
+        </div>
+
+        <!-- Country filter (flag pills, scrollable) -->
+        <div class="relative mb-3">
+            <button type="button" onclick="App.scrollRow('tv-country-row',-1)" aria-label="Scroll left" class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">‹</button>
+            <div id="tv-country-row" class="flex gap-2 overflow-x-auto no-scrollbar py-1 px-0 md:px-8"></div>
+            <button type="button" onclick="App.scrollRow('tv-country-row',1)" aria-label="Scroll right" class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">›</button>
+        </div>
+
+        <!-- Category filter (pills, scrollable) -->
+        <div class="relative mb-6">
+            <button type="button" onclick="App.scrollRow('tv-category-row',-1)" aria-label="Scroll left" class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">‹</button>
+            <div id="tv-category-row" class="flex gap-2 overflow-x-auto no-scrollbar py-1 px-0 md:px-8"></div>
+            <button type="button" onclick="App.scrollRow('tv-category-row',1)" aria-label="Scroll right" class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-black/80 border border-black/10 dark:border-white/10 shadow-md text-zinc-700 dark:text-zinc-200 hover:bg-primary hover:text-white">›</button>
         </div>
 
         <div id="tv-loading" class="text-center py-10 text-zinc-500 font-bold">Loading channels...</div>
@@ -64,6 +75,11 @@
     <script>
         App.initFirebase();
         App.gateSiteAccess();
+        App.onAuthReady(function (user) {
+            if (!user) return;
+            App.renderNav('live-tv.html');
+            App.renderFooter();
+        });
 
         var API_BASE = 'https://iptv-org.github.io/api';
         var allChannels = [], streamsByChannel = {}, allCountries = [], allCategories = [];
@@ -84,13 +100,42 @@
             allCountries = results[2];
             allCategories = results[3];
 
-            var countrySelect = document.getElementById('tv-country-select');
-            allCountries.sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c) {
-                countrySelect.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
+            function countryFlag(code) {
+                if (!code || code.length !== 2) return '🏳️';
+                return String.fromCodePoint(...code.toUpperCase().split('').map(function (c) { return 127397 + c.charCodeAt(0); }));
+            }
+
+            var selectedCountry = '', selectedCategory = '';
+
+            var countryRow = document.getElementById('tv-country-row');
+            var countryCounts = {};
+            allChannels.forEach(function (c) { if (c.country) countryCounts[c.country] = (countryCounts[c.country] || 0) + 1; });
+            var sortedCountries = allCountries.filter(function (c) { return countryCounts[c.code]; }).sort(function (a, b) { return countryCounts[b.code] - countryCounts[a.code]; });
+            countryRow.innerHTML = '<button class="country-pill px-3 py-2 rounded-lg text-xs font-bold border bg-primary border-primary text-white whitespace-nowrap flex-shrink-0" data-code="">🌐 All Countries</button>' +
+                sortedCountries.map(function (c) {
+                    return '<button class="country-pill px-3 py-2 rounded-lg text-xs font-bold border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 whitespace-nowrap flex-shrink-0" data-code="' + c.code + '">' + countryFlag(c.code) + ' ' + c.name + '</button>';
+                }).join('');
+            countryRow.querySelectorAll('.country-pill').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    selectedCountry = btn.getAttribute('data-code');
+                    countryRow.querySelectorAll('.country-pill').forEach(function (b) { b.className = 'country-pill px-3 py-2 rounded-lg text-xs font-bold border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 whitespace-nowrap flex-shrink-0'; });
+                    btn.className = 'country-pill px-3 py-2 rounded-lg text-xs font-bold border bg-primary border-primary text-white whitespace-nowrap flex-shrink-0';
+                    applyFilters();
+                });
             });
-            var categorySelect = document.getElementById('tv-category-select');
-            allCategories.sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c) {
-                categorySelect.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>';
+
+            var categoryRow = document.getElementById('tv-category-row');
+            categoryRow.innerHTML = '<button class="category-pill px-3 py-2 rounded-lg text-xs font-bold border bg-primary border-primary text-white whitespace-nowrap flex-shrink-0" data-id="">All Categories</button>' +
+                allCategories.map(function (c) {
+                    return '<button class="category-pill px-3 py-2 rounded-lg text-xs font-bold border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 whitespace-nowrap flex-shrink-0" data-id="' + c.id + '">' + c.name + '</button>';
+                }).join('');
+            categoryRow.querySelectorAll('.category-pill').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    selectedCategory = btn.getAttribute('data-id');
+                    categoryRow.querySelectorAll('.category-pill').forEach(function (b) { b.className = 'category-pill px-3 py-2 rounded-lg text-xs font-bold border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-zinc-600 dark:text-zinc-400 whitespace-nowrap flex-shrink-0'; });
+                    btn.className = 'category-pill px-3 py-2 rounded-lg text-xs font-bold border bg-primary border-primary text-white whitespace-nowrap flex-shrink-0';
+                    applyFilters();
+                });
             });
 
             renderChannels(allChannels.slice(0, 90));
@@ -117,12 +162,11 @@
 
         function applyFilters() {
             var q = document.getElementById('tv-search-input').value.trim().toLowerCase();
-            var country = document.getElementById('tv-country-select').value;
-            var category = document.getElementById('tv-category-select').value;
             var filtered = allChannels.filter(function (c) {
-                if (q && c.name.toLowerCase().indexOf(q) === -1) return false;
-                if (country && c.country !== country) return false;
-                if (category && (c.categories || []).indexOf(category) === -1) return false;
+                var countryName = (allCountries.filter(function (x) { return x.code === c.country; })[0] || {}).name || '';
+                if (q && c.name.toLowerCase().indexOf(q) === -1 && countryName.toLowerCase().indexOf(q) === -1) return false;
+                if (selectedCountry && c.country !== selectedCountry) return false;
+                if (selectedCategory && (c.categories || []).indexOf(selectedCategory) === -1) return false;
                 return true;
             });
             renderChannels(filtered.slice(0, 120));
@@ -130,8 +174,19 @@
 
         var searchTimer2;
         document.getElementById('tv-search-input').addEventListener('input', function () { clearTimeout(searchTimer2); searchTimer2 = setTimeout(applyFilters, 400); });
-        document.getElementById('tv-country-select').addEventListener('change', applyFilters);
-        document.getElementById('tv-category-select').addEventListener('change', applyFilters);
+
+        function channelToItem(id, name) {
+            return { id: 'live_' + id, title: name, poster_path: null, genres: [] };
+        }
+
+        function updateFavBtn(id) {
+            var btn = document.getElementById('tv-fav-btn');
+            if (!btn) return;
+            var isFav = (App.userData.watchlist || []).some(function (w) { return String(w.id) === 'live_' + id; });
+            btn.innerText = isFav ? '❤️ In My List' : '🤍 Add to My List';
+            btn.classList.toggle('bg-primary', isFav);
+            btn.classList.toggle('text-white', isFav);
+        }
 
         function playChannel(id, name) {
             var url = streamsByChannel[id];
@@ -139,6 +194,16 @@
             document.getElementById('tv-player-section').classList.remove('hidden');
             document.getElementById('tv-player-status').innerText = 'Loading ' + name + '...';
             document.getElementById('tv-player-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            var item = channelToItem(id, name);
+            App.saveRecentlyViewed(item, 'livetv');
+            App.logWatchEvent(item, 'livetv', null, null);
+            document.getElementById('tv-fav-toggle-wrap').classList.remove('hidden');
+            updateFavBtn(id);
+            document.getElementById('tv-fav-btn').onclick = function () {
+                App.toggleWatchlist(item, 'livetv');
+                setTimeout(function () { updateFavBtn(id); }, 0);
+            };
 
             var video = document.getElementById('tv-video');
             if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }

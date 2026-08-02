@@ -1421,15 +1421,17 @@ App.renderCards = function (results, containerId, defaultMediaType, horizontal, 
     var html = '';
     results.forEach(function (item, cardIndex) {
         var mediaType = item.media_type || defaultMediaType;
-        if (mediaType !== 'movie' && mediaType !== 'tv') return;
+        if (mediaType !== 'movie' && mediaType !== 'tv' && mediaType !== 'livetv' && mediaType !== 'radio') return;
 
         var title = item.title || item.name || 'Untitled';
+        var isLiveType = mediaType === 'livetv' || mediaType === 'radio';
         var posterPath = item.poster_path ? (App.IMG_BASE_URL + item.poster_path) : App.NO_POSTER;
         var year = (item.release_date || item.first_air_date || '').substring(0, 4);
         var rating = item.vote_average ? item.vote_average.toFixed(1) : null;
-        var href = (removeType === 'continue')
-            ? 'title.html?type=' + mediaType + '&id=' + item.id + '&resume=1'
-            : 'title.html?type=' + mediaType + '&id=' + item.id;
+        var href;
+        if (mediaType === 'livetv') href = 'live-tv.html?play=' + item.id;
+        else if (mediaType === 'radio') href = 'radio.html?play=' + item.id;
+        else href = (removeType === 'continue') ? 'title.html?type=' + mediaType + '&id=' + item.id + '&resume=1' : 'title.html?type=' + mediaType + '&id=' + item.id;
 
         var progressTag = '';
         var progressBarHtml = '';

@@ -3,6 +3,16 @@
 window.CHANGELOG_ENTRIES = [
     {
         date: '2026-07-30',
+        title: 'Live TV & Radio - real fixes',
+        items: [
+            'Fixed a real bug where the header and footer never showed up on Live TV or Radio at all',
+            'Replaced the broken filter dropdowns with proper country flags and category pills',
+            'Search on Live TV now matches channel names AND country names',
+            'Live TV and Radio can now be added to My List, show up in Recently Viewed, and get logged like everything else on the site'
+        ]
+    },
+    {
+        date: '2026-07-30',
         title: 'Live TV & Radio',
         items: [
             'New: 📺 Live TV - browse and watch free, publicly available channels from around the world, filterable by country and category',
